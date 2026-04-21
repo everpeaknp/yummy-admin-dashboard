@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { Building, Hotel, MapPin, Pencil, Phone, Search, Utensils } from "lucide-react";
 import { getRestaurants, type BackendRestaurant } from "@/lib/backend-api";
+import RestaurantAvatar from "@/components/RestaurantAvatar";
 
 export default function RestaurantsPage() {
   const [restaurantsList, setRestaurantsList] = useState<BackendRestaurant[]>([]);
@@ -67,7 +68,7 @@ export default function RestaurantsPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
-      <div className="p-6 space-y-6">
+      <div className="p-4 sm:p-6 space-y-6">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
@@ -75,7 +76,7 @@ export default function RestaurantsPage() {
               Restaurants Management
             </h1>
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-              Live data from the Azure backend
+              Live data from the platform backend
             </p>
           </div>
         </div>
@@ -164,7 +165,7 @@ export default function RestaurantsPage() {
                 {isLoading ? (
                   <tr>
                     <td className="px-6 py-8 text-sm text-gray-500 dark:text-gray-400" colSpan={7}>
-                      Loading restaurants from Azure backend...
+                      Loading restaurants...
                     </td>
                   </tr>
                 ) : error ? (
@@ -178,9 +179,11 @@ export default function RestaurantsPage() {
                     <tr key={restaurant.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 bg-gradient-to-br from-orange-400 to-orange-600 rounded-lg flex items-center justify-center text-white font-bold text-sm">
-                            {restaurant.name.charAt(0)}
-                          </div>
+                          <RestaurantAvatar
+                            name={restaurant.name}
+                            src={restaurant.profile_picture || restaurant.cover_photo || null}
+                            size={40}
+                          />
                           <div>
                             <p className="font-semibold text-gray-900 dark:text-white text-sm">{restaurant.name}</p>
                             <p className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">

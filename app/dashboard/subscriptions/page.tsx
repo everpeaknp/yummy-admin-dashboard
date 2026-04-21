@@ -8,15 +8,7 @@ import {
   type BackendRestaurant,
   type PlatformDashboardResponse,
 } from "@/lib/backend-api";
-
-const AVATAR_COLORS = [
-  "bg-orange-100 text-orange-600",
-  "bg-blue-100 text-blue-600",
-  "bg-emerald-100 text-emerald-600",
-  "bg-purple-100 text-purple-600",
-  "bg-amber-100 text-amber-600",
-  "bg-slate-200 text-slate-700",
-];
+import RestaurantAvatar from "@/components/RestaurantAvatar";
 
 type SubscriptionRow = {
   id: number;
@@ -27,8 +19,7 @@ type SubscriptionRow = {
   planType: string;
   planState: string;
   expiryDate: string;
-  avatar: string;
-  avatarColor: string;
+  logoSrc?: string | null;
 };
 
 type StatusInfo = {
@@ -248,7 +239,7 @@ export default function SubscriptionsPage() {
   }, [restaurants]);
 
   const subscriptionRows = useMemo<SubscriptionRow[]>(() => {
-    return restaurants.map((restaurant, index) => {
+    return restaurants.map((restaurant) => {
       const expiry = getExpiryDate(restaurant);
       const status = resolveStatus(restaurant, expiry);
 
@@ -261,8 +252,7 @@ export default function SubscriptionsPage() {
         planType: getPlanType(restaurant),
         planState: titleCase(restaurant.plan_state || restaurant.billing_mode || "unknown"),
         expiryDate: formatDate(expiry),
-        avatar: (restaurant.name || "R").charAt(0).toUpperCase(),
-        avatarColor: AVATAR_COLORS[index % AVATAR_COLORS.length],
+        logoSrc: restaurant.profile_picture || restaurant.cover_photo || null,
       };
     });
   }, [restaurants]);
@@ -278,11 +268,20 @@ export default function SubscriptionsPage() {
   }, [searchQuery, subscriptionRows]);
 
   const chartData = useMemo(() => {
-    return dashboard?.monthly_growth.map((item) => ({
-      month: item.label,
-      value: item.value,
-    })) || [];
+    return (
+      dashboard?.monthly_growth.map((item) => ({
+        month: item.label,
+        value: item.value,
+      })) || []
+    );
   }, [dashboard]);
+
+  const hasGrowthData = useMemo(() => {
+    if (!chartData.length) {
+      return false;
+    }
+    return chartData.some((point) => point.value !== 0);
+  }, [chartData]);
 
   const planMix = useMemo(() => {
     const total = metrics.paid + metrics.trial + metrics.free;
@@ -338,7 +337,7 @@ export default function SubscriptionsPage() {
   return (
     <div className="flex-1 flex flex-col bg-[#f5f7fa]">
       {/* Header */}
-      <header className="bg-white px-8 py-6 border-b border-slate-200">
+      <header className="bg-white px-4 sm:px-8 py-4 sm:py-6 border-b border-slate-200">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-slate-900">Subscriptions & Metrics</h1>
@@ -357,7 +356,7 @@ export default function SubscriptionsPage() {
       </header>
 
       {/* Content */}
-      <div className="flex-1 p-6 space-y-6">
+      <div className="flex-1 p-4 sm:p-6 space-y-6">
         {error ? (
           <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             {error}
@@ -427,15 +426,29 @@ export default function SubscriptionsPage() {
               </select>
             </div>
             <div className="w-full h-[280px] min-w-0 min-h-0">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                  <XAxis dataKey="month" stroke="#94a3b8" style={{ fontSize: '11px' }} tickLine={false} axisLine={false} />
-                  <YAxis stroke="#94a3b8" style={{ fontSize: '11px' }} tickLine={false} axisLine={false} />
-                  <Tooltip />
-                  <Bar dataKey="value" fill="#f97316" radius={[6, 6, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+              {hasGrowthData ? (
+                <ResponsiveContainer
+                  width="100%"
+                  height="100%"
+                  minWidth={0}
+                  minHeight={280}
+                  initialDimension={{ width: 640, height: 280 }}
+                >
+                  <BarChart data={chartData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                    <XAxis dataKey="month" stroke="#94a3b8" style={{ fontSize: "11px" }} tickLine={false} axisLine={false} />
+                    <YAxis stroke="#94a3b8" style={{ fontSize: "11px" }} tickLine={false} axisLine={false} />
+                    <Tooltip />
+                    <Bar dataKey="value" fill="#f97316" radius={[6, 6, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full w-full rounded-xl border border-dashed border-slate-200 bg-slate-50 flex items-center justify-center px-4 text-center text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-900/20 dark:text-slate-300">
+                  {dashboard
+                    ? "No portfolio growth data available yet."
+                    : "Portfolio growth is unavailable right now."}
+                </div>
+              )}
             </div>
           </div>
 
@@ -546,9 +559,7 @@ export default function SubscriptionsPage() {
                     <tr key={sub.id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
                       <td className="py-4">
                         <div className="flex items-center gap-3">
-                          <div className={`w-10 h-10 rounded-lg ${sub.avatarColor} flex items-center justify-center font-semibold text-sm`}>
-                            {sub.avatar}
-                          </div>
+                          <RestaurantAvatar name={sub.restaurant} src={sub.logoSrc} size={40} />
                           <div>
                             <p className="text-sm font-semibold text-slate-900">{sub.restaurant}</p>
                             <p className="text-xs text-slate-500">{sub.restaurantId}</p>

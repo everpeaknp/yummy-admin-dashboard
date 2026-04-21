@@ -80,6 +80,8 @@ export function saveAuthSession(response: LoginResponse): AuthSession {
     window.localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(session));
     window.localStorage.setItem("accessToken", session.accessToken);
     window.localStorage.setItem("refreshToken", session.refreshToken);
+    // Let same-tab subscribers (useSyncExternalStore) react to auth changes.
+    window.dispatchEvent(new Event("yummy-auth"));
   }
 
   return session;
@@ -93,6 +95,7 @@ export function clearAuthSession() {
   window.localStorage.removeItem(AUTH_STORAGE_KEY);
   window.localStorage.removeItem("accessToken");
   window.localStorage.removeItem("refreshToken");
+  window.dispatchEvent(new Event("yummy-auth"));
 }
 
 export async function loginWithPassword(email: string, password: string) {

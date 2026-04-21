@@ -2,15 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { getRestaurants, type BackendRestaurant } from "@/lib/backend-api";
-
-const AVATAR_COLORS = [
-  "bg-orange-100 text-orange-600",
-  "bg-blue-100 text-blue-600",
-  "bg-emerald-100 text-emerald-600",
-  "bg-purple-100 text-purple-600",
-  "bg-amber-100 text-amber-600",
-  "bg-slate-200 text-slate-700",
-];
+import RestaurantAvatar from "@/components/RestaurantAvatar";
 
 const STATUS_TABS = [
   { key: "all", label: "All" },
@@ -25,8 +17,7 @@ type BillingRow = {
   id: number;
   restaurant: string;
   restaurantId: string;
-  avatar: string;
-  avatarColor: string;
+  logoSrc?: string | null;
   planState: string;
   billingMode: string;
   expiresAtLabel: string;
@@ -136,7 +127,7 @@ export default function PaymentsPage() {
   }, []);
 
   const billingRows = useMemo<BillingRow[]>(() => {
-    return restaurants.map((restaurant, index) => {
+    return restaurants.map((restaurant) => {
       const expiresAt = getExpiryDate(restaurant);
       const status = resolveStatus(restaurant, expiresAt);
 
@@ -144,8 +135,7 @@ export default function PaymentsPage() {
         id: restaurant.id,
         restaurant: restaurant.name,
         restaurantId: `#${String(restaurant.id).padStart(5, "0")}`,
-        avatar: (restaurant.name || "R").charAt(0).toUpperCase(),
-        avatarColor: AVATAR_COLORS[index % AVATAR_COLORS.length],
+        logoSrc: restaurant.profile_picture || restaurant.cover_photo || null,
         planState: titleCase(restaurant.plan_state || restaurant.billing_mode || "unknown"),
         billingMode: titleCase(restaurant.billing_mode || "unknown"),
         expiresAtLabel: formatDate(expiresAt),
@@ -190,14 +180,40 @@ export default function PaymentsPage() {
     ];
   }, [billingRows]);
 
+  const statusBadgeClass = (statusKey: string) => {
+    if (statusKey === "paid") {
+      return "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-200";
+    }
+    if (statusKey === "trial") {
+      return "bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-200";
+    }
+    if (statusKey === "expired") {
+      return "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-200";
+    }
+    if (statusKey === "disabled") {
+      return "bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-200";
+    }
+    return "bg-slate-100 text-slate-700 dark:bg-slate-500/15 dark:text-slate-200";
+  };
+
+  const statPillClass = (tone: string) => {
+    if (tone === "good") {
+      return "bg-green-50 text-green-700 dark:bg-green-500/15 dark:text-green-200";
+    }
+    if (tone === "warn") {
+      return "bg-amber-50 text-amber-800 dark:bg-amber-500/15 dark:text-amber-200";
+    }
+    return "bg-blue-50 text-blue-700 dark:bg-blue-500/15 dark:text-blue-200";
+  };
+
   return (
-    <div className="flex-1 flex flex-col bg-[#f5f7fa]">
+    <div className="flex-1 flex flex-col bg-[#f5f7fa] dark:bg-gray-900 transition-colors">
       {/* Header */}
-      <header className="bg-white px-8 py-6 border-b border-slate-200">
+      <header className="bg-white dark:bg-gray-800 px-4 sm:px-8 py-4 sm:py-6 border-b border-slate-200 dark:border-gray-700 transition-colors">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">Payments Monitoring</h1>
-            <p className="text-sm text-slate-500 mt-1">Track billing status from live restaurant plans</p>
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Payments Monitoring</h1>
+            <p className="text-sm text-slate-500 dark:text-gray-300 mt-1">Track billing status from live restaurant plans</p>
           </div>
           <div className="flex items-center gap-3">
             <input
@@ -205,10 +221,10 @@ export default function PaymentsPage() {
               placeholder="Search transactions..."
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
-              className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 w-64"
+              className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500 w-full sm:w-64 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:placeholder:text-gray-400"
             />
-            <button className="p-2 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors relative">
-              <span className="material-icons-round text-slate-600 text-[20px]">notifications</span>
+            <button className="p-2 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors relative dark:bg-gray-700 dark:border-gray-600 dark:hover:bg-gray-600/70">
+              <span className="material-icons-round text-slate-600 dark:text-gray-200 text-[20px]">notifications</span>
               <span className="absolute top-1 right-1 w-2 h-2 bg-orange-500 rounded-full"></span>
             </button>
           </div>
@@ -216,10 +232,10 @@ export default function PaymentsPage() {
       </header>
 
       {/* Content */}
-      <div className="flex-1 p-6 space-y-6">
+      <div className="flex-1 p-4 sm:p-6 space-y-6">
 
       {error ? (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-200">
           {error}
         </div>
       ) : null}
@@ -227,29 +243,22 @@ export default function PaymentsPage() {
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-5">
         {stats.map((stat) => {
-          const toneClass =
-            stat.tone === "good"
-              ? "bg-green-50 text-green-600"
-              : stat.tone === "warn"
-              ? "bg-amber-50 text-amber-700"
-              : "bg-blue-50 text-blue-600";
-
           return (
-            <div key={stat.label} className="bg-white rounded-xl p-5 shadow-sm">
+            <div key={stat.label} className="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm border border-transparent dark:border-gray-700 transition-colors">
               <div className="flex items-start justify-between mb-3">
-                <p className="text-xs text-slate-500">{stat.label}</p>
-                <span className={`text-xs font-semibold px-2 py-0.5 rounded ${toneClass}`}>
+                <p className="text-xs text-slate-500 dark:text-gray-300">{stat.label}</p>
+                <span className={`text-xs font-semibold px-2 py-0.5 rounded ${statPillClass(stat.tone)}`}>
                   {stat.note}
                 </span>
               </div>
-              <p className="text-2xl font-bold text-slate-900">{stat.value}</p>
+              <p className="text-2xl font-bold text-slate-900 dark:text-white">{stat.value}</p>
             </div>
           );
         })}
       </div>
 
       {/* Table Card */}
-      <div className="bg-white rounded-xl p-6 shadow-sm">
+      <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-transparent dark:border-gray-700 transition-colors">
         {/* Tabs */}
         <div className="flex flex-wrap items-center gap-3 mb-6">
           {STATUS_TABS.map((tab) => (
@@ -259,7 +268,7 @@ export default function PaymentsPage() {
               className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
                 activeTab === tab.key
                   ? "bg-orange-500 text-white"
-                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600/70"
               }`}
             >
               {tab.label}
@@ -271,20 +280,20 @@ export default function PaymentsPage() {
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
-              <tr className="border-b border-slate-200">
-                <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider pb-4">Restaurant</th>
-                <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider pb-4">Plan State</th>
-                <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider pb-4">Billing Mode</th>
-                <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider pb-4">Expires</th>
-                <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider pb-4">Status</th>
-                <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider pb-4">Action</th>
+              <tr className="border-b border-slate-200 dark:border-gray-700">
+                <th className="text-left text-xs font-semibold text-slate-500 dark:text-gray-300 uppercase tracking-wider pb-4">Restaurant</th>
+                <th className="text-left text-xs font-semibold text-slate-500 dark:text-gray-300 uppercase tracking-wider pb-4">Plan State</th>
+                <th className="text-left text-xs font-semibold text-slate-500 dark:text-gray-300 uppercase tracking-wider pb-4">Billing Mode</th>
+                <th className="text-left text-xs font-semibold text-slate-500 dark:text-gray-300 uppercase tracking-wider pb-4">Expires</th>
+                <th className="text-left text-xs font-semibold text-slate-500 dark:text-gray-300 uppercase tracking-wider pb-4">Status</th>
+                <th className="text-left text-xs font-semibold text-slate-500 dark:text-gray-300 uppercase tracking-wider pb-4">Action</th>
               </tr>
             </thead>
 
             <tbody>
               {isLoading ? (
                 <tr>
-                  <td className="py-6 text-sm text-slate-500" colSpan={6}>
+                  <td className="py-6 text-sm text-slate-500 dark:text-gray-300" colSpan={6}>
                     Loading billing status...
                   </td>
                 </tr>
@@ -292,56 +301,42 @@ export default function PaymentsPage() {
                 filteredRows.map((row) => (
                   <tr
                     key={row.id}
-                    className="border-b border-slate-100 hover:bg-slate-50 transition"
+                    className="border-b border-slate-100 dark:border-gray-700 hover:bg-slate-50 dark:hover:bg-gray-700/40 transition"
                   >
                     <td className="py-4">
                       <div className="flex items-center gap-3">
-                        <div
-                          className={`w-10 h-10 rounded-lg flex items-center justify-center font-semibold text-sm ${row.avatarColor}`}
-                        >
-                          {row.avatar}
-                        </div>
+                        <RestaurantAvatar name={row.restaurant} src={row.logoSrc} size={40} />
                         <div>
-                          <p className="text-sm font-semibold text-slate-900">
+                          <p className="text-sm font-semibold text-slate-900 dark:text-white">
                             {row.restaurant}
                           </p>
-                          <p className="text-xs text-slate-500">{row.restaurantId}</p>
+                          <p className="text-xs text-slate-500 dark:text-gray-300">{row.restaurantId}</p>
                         </div>
                       </div>
                     </td>
 
                     <td className="py-4">
-                      <p className="text-sm text-slate-700">{row.planState}</p>
+                      <p className="text-sm text-slate-700 dark:text-gray-200">{row.planState}</p>
                     </td>
 
                     <td className="py-4">
-                      <p className="text-sm text-slate-700">{row.billingMode}</p>
+                      <p className="text-sm text-slate-700 dark:text-gray-200">{row.billingMode}</p>
                     </td>
 
                     <td className="py-4">
-                      <p className="text-sm text-slate-600">{row.expiresAtLabel}</p>
+                      <p className="text-sm text-slate-600 dark:text-gray-300">{row.expiresAtLabel}</p>
                     </td>
 
                     <td className="py-4">
                       <span
-                        className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full ${
-                          row.statusKey === "paid"
-                            ? "bg-green-100 text-green-700"
-                            : row.statusKey === "trial"
-                            ? "bg-blue-100 text-blue-700"
-                            : row.statusKey === "expired"
-                            ? "bg-red-100 text-red-700"
-                            : row.statusKey === "disabled"
-                            ? "bg-amber-100 text-amber-700"
-                            : "bg-slate-100 text-slate-700"
-                        }`}
+                        className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full ${statusBadgeClass(row.statusKey)}`}
                       >
                         {row.statusLabel}
                       </span>
                     </td>
 
                     <td className="py-4">
-                      <button className="text-sm text-orange-600 hover:text-orange-700 font-medium transition-colors">
+                      <button className="text-sm text-orange-600 hover:text-orange-700 dark:text-orange-400 dark:hover:text-orange-300 font-medium transition-colors">
                         Review
                       </button>
                     </td>
@@ -349,7 +344,7 @@ export default function PaymentsPage() {
                 ))
               ) : (
                 <tr>
-                  <td className="py-6 text-sm text-slate-500" colSpan={6}>
+                  <td className="py-6 text-sm text-slate-500 dark:text-gray-300" colSpan={6}>
                     No billing records match the current filters.
                   </td>
                 </tr>

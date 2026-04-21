@@ -7,21 +7,12 @@ import {
   type BackendRestaurant,
   type PlatformDashboardResponse,
 } from "@/lib/backend-api";
-
-const AVATAR_COLORS = [
-  "bg-orange-100 text-orange-600",
-  "bg-blue-100 text-blue-600",
-  "bg-emerald-100 text-emerald-600",
-  "bg-purple-100 text-purple-600",
-  "bg-amber-100 text-amber-600",
-  "bg-slate-200 text-slate-700",
-];
+import RestaurantAvatar from "@/components/RestaurantAvatar";
 
 type PlanAssignment = {
   id: number;
   restaurant: string;
-  avatar: string;
-  avatarColor: string;
+  logoSrc?: string | null;
   currentPlan: string;
   statusLabel: string;
   statusTone: "green" | "yellow" | "red" | "slate";
@@ -239,15 +230,14 @@ export default function PlansPage() {
   }, [dashboard?.billing_mode_breakdown, metrics.free, metrics.paid, metrics.trial]);
 
   const planAssignments = useMemo<PlanAssignment[]>(() => {
-    const mapped = restaurants.map((restaurant, index) => {
+    const mapped = restaurants.map((restaurant) => {
       const expiry = getExpiryDate(restaurant);
       const status = resolveStatus(restaurant, expiry);
       const expiresAtRaw = expiry ? expiry.getTime() : Number.MAX_SAFE_INTEGER;
       return {
         id: restaurant.id,
         restaurant: restaurant.name,
-        avatar: (restaurant.name || "R").charAt(0).toUpperCase(),
-        avatarColor: AVATAR_COLORS[index % AVATAR_COLORS.length],
+        logoSrc: restaurant.profile_picture || restaurant.cover_photo || null,
         currentPlan: titleCase(restaurant.plan_state || restaurant.billing_mode || "unknown"),
         statusLabel: status.label,
         statusTone: getStatusTone(status.key),
@@ -263,7 +253,7 @@ export default function PlansPage() {
   return (
     <div className="flex-1 flex flex-col bg-[#f5f7fa]">
       {/* Header */}
-      <header className="bg-white px-8 py-6 border-b border-slate-200">
+      <header className="bg-white px-4 sm:px-8 py-4 sm:py-6 border-b border-slate-200">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-slate-900">SaaS Plans Management</h1>
@@ -280,7 +270,7 @@ export default function PlansPage() {
       </header>
 
       {/* Content */}
-      <div className="flex-1 p-6 space-y-6">
+      <div className="flex-1 p-4 sm:p-6 space-y-6">
         {error ? (
           <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             {error}
@@ -415,9 +405,7 @@ export default function PlansPage() {
                     <tr key={assignment.id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
                       <td className="py-4">
                         <div className="flex items-center gap-3">
-                          <div className={`w-10 h-10 rounded-lg ${assignment.avatarColor} flex items-center justify-center font-semibold text-xs`}>
-                            {assignment.avatar}
-                          </div>
+                          <RestaurantAvatar name={assignment.restaurant} src={assignment.logoSrc} size={40} />
                           <span className="text-sm font-semibold text-slate-900">{assignment.restaurant}</span>
                         </div>
                       </td>

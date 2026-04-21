@@ -11,6 +11,7 @@ import {
   deleteUser,
   getBuiltInRoles,
   getPermissionsCatalog,
+  getRedisHealth,
   getRestaurantAdmins,
   getRestaurants,
   getRoles,
@@ -108,6 +109,8 @@ export default function SettingsPage() {
   const { theme, setTheme } = useTheme();
   const [activeTab, setActiveTab] = useState("users");
   const [token, setToken] = useState<string | undefined>(undefined);
+  const [backendHealth, setBackendHealth] = useState<"ok" | "redis_down" | "unknown">("unknown");
+  const [backendHealthMessage, setBackendHealthMessage] = useState<string | null>(null);
 
   const [users, setUsers] = useState<BackendUser[]>([]);
   const [roles, setRoles] = useState<RoleRead[]>([]);
@@ -152,6 +155,36 @@ export default function SettingsPage() {
       return;
     }
     setToken(window.localStorage.getItem("accessToken") || undefined);
+  }, []);
+
+  useEffect(() => {
+    let alive = true;
+    async function checkHealth() {
+      try {
+        const result = await getRedisHealth();
+        if (!alive) {
+          return;
+        }
+        if (result && result.status === "ok") {
+          setBackendHealth("ok");
+          setBackendHealthMessage(null);
+        } else {
+          setBackendHealth("redis_down");
+          setBackendHealthMessage("Backend Redis is unreachable. Admin endpoints may fail until it’s back.");
+        }
+      } catch (error) {
+        if (!alive) {
+          return;
+        }
+        setBackendHealth("unknown");
+        setBackendHealthMessage(error instanceof Error ? error.message : "Backend health check failed.");
+      }
+    }
+
+    checkHealth();
+    return () => {
+      alive = false;
+    };
   }, []);
 
   const loadUsers = async (search?: string) => {
@@ -258,11 +291,12 @@ export default function SettingsPage() {
   }, [token]);
 
   useEffect(() => {
-    if (!selectedRestaurantId) {
+    // Only load restaurant admins when the Admins tab is open.
+    if (activeTab !== "admins" || !selectedRestaurantId) {
       return;
     }
     loadRestaurantAdmins(selectedRestaurantId);
-  }, [selectedRestaurantId]);
+  }, [activeTab, selectedRestaurantId]);
 
   const builtInRoleOptions = useMemo(() => {
     const keys = Object.keys(builtInRoles);
@@ -497,17 +531,27 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="flex-1 flex flex-col bg-[#f5f7fa]">
-      <header className="bg-white px-8 py-6 border-b border-slate-200">
+    <div className="flex-1 flex flex-col bg-[#f5f7fa] dark:bg-gray-900 transition-colors">
+      <header className="bg-white dark:bg-gray-800 px-4 sm:px-8 py-4 sm:py-6 border-b border-slate-200 dark:border-gray-700 transition-colors">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">Access & Settings</h1>
-            <p className="text-sm text-slate-500 mt-1">Manage users, roles, and restaurant admins.</p>
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Access & Settings</h1>
+            <p className="text-sm text-slate-500 dark:text-gray-300 mt-1">Manage users, roles, and restaurant admins.</p>
           </div>
         </div>
       </header>
 
-      <div className="flex-1 p-6 space-y-6">
+      <div className="flex-1 p-4 sm:p-6 space-y-6">
+        {backendHealthMessage ? (
+          <div className={`rounded-xl border px-4 py-3 text-sm ${
+            backendHealth === "redis_down"
+              ? "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-100"
+              : "border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-200"
+          }`}>
+            {backendHealthMessage}
+          </div>
+        ) : null}
+
         <div className="flex flex-wrap items-center gap-3">
           {TABS.map((tab) => (
             <button
@@ -517,7 +561,7 @@ export default function SettingsPage() {
               className={`px-4 py-2 rounded-lg text-sm font-semibold transition ${
                 activeTab === tab.key
                   ? "bg-orange-500 text-white"
-                  : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-50"
+                  : "bg-white dark:bg-gray-800 text-slate-600 dark:text-gray-200 border border-slate-200 dark:border-gray-700 hover:bg-slate-50 dark:hover:bg-gray-700/60"
               }`}
             >
               {tab.label}
@@ -539,7 +583,7 @@ export default function SettingsPage() {
                     placeholder="Search users"
                     value={userSearch}
                     onChange={(event) => setUserSearch(event.target.value)}
-                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 sm:w-64"
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 placeholder:text-slate-400 sm:w-64 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:placeholder:text-gray-400"
                   />
                   <button
                     type="button"
@@ -552,7 +596,7 @@ export default function SettingsPage() {
               </div>
 
               {usersError ? (
-                <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">
+                <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-200">
                   {usersError}
                 </div>
               ) : null}

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import Card from "@/components/Card";
+import RestaurantAvatar from "@/components/RestaurantAvatar";
 import { getRestaurant, updateRestaurant, type BackendRestaurant, type RestaurantUpdatePayload } from "@/lib/backend-api";
 
 type RestaurantFormState = {
@@ -151,7 +152,7 @@ export default function RestaurantDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="flex-1 bg-[#f5f7fa] p-6">
+      <div className="flex-1 bg-[#f5f7fa] p-4 sm:p-6">
         <Card className="p-8 text-center">
           <p className="text-sm text-slate-500">Loading restaurant details...</p>
         </Card>
@@ -161,7 +162,7 @@ export default function RestaurantDetailPage() {
 
   if (!restaurant) {
     return (
-      <div className="flex-1 bg-[#f5f7fa] p-6">
+      <div className="flex-1 bg-[#f5f7fa] p-4 sm:p-6">
         <Card className="p-8 text-center">
           <h1 className="text-2xl font-bold text-slate-900">Restaurant not found</h1>
           <p className="mt-2 text-sm text-slate-500">The backend did not return a restaurant for this id.</p>
@@ -176,7 +177,7 @@ export default function RestaurantDetailPage() {
   }
 
   return (
-    <div className="flex-1 bg-[#f5f7fa] p-6 space-y-6">
+    <div className="flex-1 bg-[#f5f7fa] p-4 sm:p-6 space-y-6">
       <div className="flex flex-col gap-4 rounded-2xl bg-white p-6 shadow-sm border border-slate-200 xl:flex-row xl:items-start xl:justify-between">
         <div>
           <Link href="/dashboard/restaurants" className="inline-flex items-center gap-2 text-sm font-semibold text-slate-500 hover:text-slate-900 transition-colors">
@@ -184,9 +185,12 @@ export default function RestaurantDetailPage() {
             Back to Restaurants
           </Link>
           <div className="mt-4 flex flex-wrap items-center gap-3">
-            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-orange-100 text-2xl font-bold text-orange-600">
-              {restaurant.name.charAt(0)}
-            </div>
+            <RestaurantAvatar
+              name={restaurant.name}
+              src={restaurant.profile_picture || restaurant.cover_photo || null}
+              size={64}
+              className="rounded-2xl"
+            />
             <div>
               <h1 className="text-3xl font-bold text-slate-900">{restaurant.name}</h1>
               <p className="mt-1 text-sm text-slate-500">{restaurant.address}</p>

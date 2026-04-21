@@ -58,8 +58,8 @@ export default function HotelsPage() {
   }, [restaurants, searchQuery]);
 
   return (
-    <div className="flex-1 bg-[#f5f7fa] p-6 space-y-6">
-      <div className="flex flex-col gap-4 rounded-2xl bg-white p-6 shadow-sm border border-slate-200 lg:flex-row lg:items-center lg:justify-between">
+    <div className="flex-1 bg-[#f5f7fa] p-4 sm:p-6 space-y-6">
+      <div className="flex flex-col gap-4 rounded-2xl bg-white p-4 sm:p-6 shadow-sm border border-slate-200 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
             <Hotel className="text-orange-500" size={28} />

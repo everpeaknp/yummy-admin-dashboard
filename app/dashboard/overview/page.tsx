@@ -17,6 +17,7 @@ import {
 import { Building2, Hotel, ShieldCheck, UtensilsCrossed } from "lucide-react";
 import Card from "@/components/Card";
 import KPICard from "@/components/KPICard";
+import RestaurantAvatar from "@/components/RestaurantAvatar";
 import { getPlatformDashboard, getRestaurants, type BackendRestaurant, type PlatformDashboardResponse } from "@/lib/backend-api";
 
 const palette = ["#f97316", "#2563eb", "#8b5cf6", "#14b8a6", "#ef4444", "#f59e0b"];
@@ -161,7 +162,7 @@ export default function OverviewPage() {
 
   return (
     <div className="flex-1 flex flex-col bg-[#f5f7fa]">
-      <header className="bg-white px-8 py-6 border-b border-slate-200">
+      <header className="bg-white px-4 sm:px-8 py-4 sm:py-6 border-b border-slate-200">
         <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.24em] text-orange-500">Super Admin Console</p>
@@ -196,9 +197,9 @@ export default function OverviewPage() {
         </div>
       </header>
 
-      <div className="flex-1 p-6 space-y-6">
+      <div className="flex-1 p-4 sm:p-6 space-y-6">
         {fallbackNote ? (
-          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-200">
             {fallbackNote}
           </div>
         ) : null}
@@ -221,8 +222,15 @@ export default function OverviewPage() {
             </div>
             <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
               <div>
-                <div className="h-[240px]">
-                  <ResponsiveContainer width="100%" height="100%">
+                <div className="h-[240px] min-h-[240px] min-w-0">
+                  <ResponsiveContainer
+                    width="100%"
+                    height="100%"
+                    minWidth={0}
+                    minHeight={240}
+                    // Avoid the dev-time warning on the first render before ResizeObserver measures.
+                    initialDimension={{ width: 360, height: 240 }}
+                  >
                     <PieChart>
                       <Pie data={billingData} dataKey="value" nameKey="name" innerRadius={60} outerRadius={84} paddingAngle={4} strokeWidth={0}>
                         {billingData.map((entry, index) => (
@@ -338,13 +346,16 @@ export default function OverviewPage() {
                       <tr key={restaurant.id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
                         <td className="py-4 pr-4">
                           <div className="flex items-center gap-3">
-                            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-orange-100 text-sm font-bold text-orange-600">
-                              {restaurant.name.charAt(0)}
-                            </div>
-                            <div>
-                              <p className="font-semibold text-slate-900">{restaurant.name}</p>
-                              <p className="text-xs text-slate-500">{restaurant.address}</p>
-                            </div>
+                      <RestaurantAvatar
+                        name={restaurant.name}
+                        src={restaurant.profile_picture || restaurant.cover_photo || null}
+                        size={44}
+                        className="rounded-xl"
+                      />
+                      <div>
+                        <p className="font-semibold text-slate-900">{restaurant.name}</p>
+                        <p className="text-xs text-slate-500">{restaurant.address}</p>
+                      </div>
                           </div>
                         </td>
                         <td className="py-4 pr-4">
@@ -479,16 +490,30 @@ export default function OverviewPage() {
               <p className="text-sm text-slate-500">Monthly platform growth when available</p>
             </div>
 
-            <div className="h-[260px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={growthData.length ? growthData : serviceMixData.map((item) => ({ label: item.name, value: item.value }))}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-                  <XAxis dataKey="label" stroke="#94a3b8" style={{ fontSize: "11px" }} tickLine={false} axisLine={false} />
-                  <YAxis stroke="#94a3b8" style={{ fontSize: "11px" }} tickLine={false} axisLine={false} />
-                  <Tooltip />
-                  <Bar dataKey="value" radius={[8, 8, 0, 0]} fill="#f97316" />
-                </BarChart>
-              </ResponsiveContainer>
+            <div className="h-[260px] min-h-[260px] min-w-0">
+              {growthData.length && growthData.some((point) => point.value !== 0) ? (
+                <ResponsiveContainer
+                  width="100%"
+                  height="100%"
+                  minWidth={0}
+                  minHeight={260}
+                  initialDimension={{ width: 360, height: 260 }}
+                >
+                  <BarChart data={growthData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                    <XAxis dataKey="label" stroke="#94a3b8" style={{ fontSize: "11px" }} tickLine={false} axisLine={false} />
+                    <YAxis stroke="#94a3b8" style={{ fontSize: "11px" }} tickLine={false} axisLine={false} />
+                    <Tooltip />
+                    <Bar dataKey="value" radius={[8, 8, 0, 0]} fill="#f97316" />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full w-full rounded-xl border border-dashed border-slate-200 bg-slate-50 flex items-center justify-center px-4 text-center text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-900/20 dark:text-slate-300">
+                  {dashboard
+                    ? "No growth data available yet."
+                    : "Growth snapshot is unavailable right now."}
+                </div>
+              )}
             </div>
           </Card>
         </section>

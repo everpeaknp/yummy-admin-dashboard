@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { usePathname } from "next/navigation";
 import { 
@@ -10,11 +11,17 @@ import {
   Wallet,
   Users,
   Building2,
-  LogOut
+  LogOut,
+  X,
 } from "lucide-react";
 import { logoutSession } from "@/lib/auth";
 
-export default function Sidebar() {
+type SidebarProps = {
+  mobileOpen?: boolean;
+  onMobileClose?: () => void;
+};
+
+export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
 
@@ -39,14 +46,35 @@ export default function Sidebar() {
     return pathname.startsWith(href);
   };
 
-  return (
-    <aside className="w-[200px] bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 min-h-screen fixed left-0 top-0 flex flex-col transition-colors">
+  const closeMobile = () => onMobileClose?.();
+
+  const content = (
+    <>
       {/* Logo */}
-      <div className="px-5 py-6 flex items-center gap-2 border-b border-gray-100 dark:border-gray-700">
-        <div className="w-9 h-9 bg-orange-500 rounded-lg flex items-center justify-center">
-          <span className="text-white text-xl font-bold">Y</span>
+      <div className="px-5 py-6 flex items-center justify-between gap-2 border-b border-gray-100 dark:border-gray-700">
+        <div className="flex items-center gap-2">
+          <div className="relative w-9 h-9 rounded-lg overflow-hidden bg-white ring-1 ring-orange-200/70 shadow-sm">
+            <Image
+              src="/yummy_logo.png"
+              alt="Yummy"
+              fill
+              priority
+              className="object-contain"
+              unoptimized
+            />
+          </div>
+          <span className="text-base font-bold text-orange-500">Admin</span>
         </div>
-        <span className="text-base font-bold text-orange-500">Admin</span>
+
+        {/* Mobile close */}
+        <button
+          type="button"
+          className="md:hidden inline-flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-700"
+          onClick={closeMobile}
+          aria-label="Close navigation"
+        >
+          <X size={18} />
+        </button>
       </div>
 
       {/* Navigation */}
@@ -58,6 +86,7 @@ export default function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
+              onClick={closeMobile}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13px] font-medium transition-all ${
                 active
                   ? "bg-orange-500 text-white"
@@ -78,6 +107,7 @@ export default function Sidebar() {
         </p>
         <Link
           href="/dashboard/settings"
+          onClick={closeMobile}
           className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13px] font-medium transition-all ${
             pathname === "/dashboard/settings"
               ? "bg-orange-500 text-white"
@@ -88,13 +118,40 @@ export default function Sidebar() {
         </Link>
         <button
           type="button"
-          onClick={handleLogout}
-          className="mt-2 flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium text-red-600 transition-all hover:bg-red-50"
+          onClick={async () => {
+            closeMobile();
+            await handleLogout();
+          }}
+          className="mt-2 flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium text-red-600 transition-all hover:bg-red-50 dark:hover:bg-red-950/30"
         >
           <LogOut size={16} />
           <span>Logout</span>
         </button>
       </div>
-    </aside>
+    </>
+  );
+
+  return (
+    <>
+      {/* Desktop sidebar (unchanged behavior) */}
+      <aside className="hidden md:flex w-[200px] bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 min-h-screen fixed left-0 top-0 flex-col transition-colors">
+        {content}
+      </aside>
+
+      {/* Mobile drawer */}
+      {mobileOpen && (
+        <div className="md:hidden fixed inset-0 z-50">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/40"
+            aria-label="Close navigation overlay"
+            onClick={closeMobile}
+          />
+          <aside className="absolute left-0 top-0 h-screen w-[200px] bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col shadow-xl">
+            {content}
+          </aside>
+        </div>
+      )}
+    </>
   );
 }

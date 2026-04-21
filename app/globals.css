@@ -31,10 +31,6 @@ body {
   color: #E2E8F0 !important;
 }
 
-.dark * {
-  color: inherit;
-}
-
 /* Override all text colors in dark mode */
 .dark [class*="text-slate"],
 .dark [class*="text-gray"] {
@@ -189,15 +185,7 @@ body {
 }
 
 /* Force all text to be light in dark mode */
-.dark * {
-  border-color: inherit;
-}
-
-.dark div,
-.dark td,
-.dark th {
-  color: inherit;
-}
+/* Avoid global `* { color: ... }` overrides; they break Tailwind color utilities. */
 
 /* Border colors */
 .dark .border-slate-200 {

@@ -10,19 +10,21 @@ interface KPICardProps {
 }
 
 export default function KPICard({ title, value, icon: Icon, trend, trendUp }: KPICardProps) {
+  const trendClass = trendUp ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400";
+
   return (
     <Card className="p-6">
       <div className="flex items-start justify-between">
         <div>
-          <p className="text-sm text-gray-600 mb-1">{title}</p>
-          <h3 className="text-3xl font-bold text-gray-900">{value}</h3>
+          <p className="mb-1 text-sm text-gray-600 dark:text-gray-300">{title}</p>
+          <h3 className="text-3xl font-bold text-gray-900 dark:text-white">{value}</h3>
           {trend && (
-            <p className={`text-sm mt-2 ${trendUp ? "text-green-600" : "text-red-600"}`}>
+            <p className={`mt-2 text-sm ${trendClass}`}>
               {trend}
             </p>
           )}
         </div>
-        <div className="p-3 bg-orange-50 rounded-lg">
+        <div className="rounded-lg bg-orange-50 p-3 dark:bg-orange-500/10">
           <Icon className="text-orange-600" size={24} />
         </div>
       </div>

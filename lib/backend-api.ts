@@ -246,19 +246,44 @@ async function backendRequest<T>(
     body?: unknown;
   } = {},
 ): Promise<T> {
-  const response = await fetch(`${getBaseUrl(options.baseUrl)}${path}`, {
+  const url = `${getBaseUrl(options.baseUrl)}${path}`;
+  const hasBody = options.body !== undefined;
+
+  const response = await fetch(url, {
     method: options.method || "GET",
     headers: {
-      "Content-Type": "application/json",
+      ...(hasBody ? { "Content-Type": "application/json" } : {}),
       ...(options.token ? { Authorization: `Bearer ${options.token}` } : {}),
     },
     cache: "no-store",
-    ...(options.body !== undefined ? { body: JSON.stringify(options.body) } : {}),
+    ...(hasBody ? { body: JSON.stringify(options.body) } : {}),
   });
 
   if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(errorText || `Request failed with status ${response.status}`);
+    const errorText = await response.text().catch(() => "");
+
+    // Backend often returns JSON like:
+    // {"status":"error","message":"Internal server error","errors":[]}
+    // or FastAPI-style {"detail":"..."}.
+    let message = errorText;
+    try {
+      const parsed: unknown = JSON.parse(errorText);
+      if (parsed && typeof parsed === "object") {
+        const record = parsed as Record<string, unknown>;
+        const parsedMessage = record.message;
+        const parsedDetail = record.detail;
+        message =
+          (typeof parsedMessage === "string" && parsedMessage) ||
+          (typeof parsedDetail === "string" && parsedDetail) ||
+          message;
+      }
+    } catch {
+      // not JSON
+    }
+
+    const safeMessage =
+      (message || "").trim() || `Request failed with status ${response.status}`;
+    throw new Error(`[${response.status}] ${path}: ${safeMessage}`);
   }
 
   return response.json() as Promise<T>;
@@ -266,6 +291,16 @@ async function backendRequest<T>(
 
 export async function backendFetch<T>(path: string, options: BackendClientOptions = {}): Promise<T> {
   return backendRequest<T>(path, options);
+}
+
+export type RedisHealthRead = {
+  status: string;
+  redis?: string;
+  detail?: string;
+};
+
+export async function getRedisHealth(options: BackendClientOptions = {}): Promise<RedisHealthRead> {
+  return backendFetch<RedisHealthRead>("/health/redis", options);
 }
 
 export async function getAdminDashboardV2(

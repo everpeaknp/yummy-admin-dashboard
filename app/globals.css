@@ -1,0 +1,601 @@
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --primary: #F97316;
+    --background-light: #F8FAFC;
+    --background-dark: #0F172A;
+    --sidebar-dark: #1E293B;
+    --card-dark: #1E293B;
+  }
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Dark mode styles */
+.dark {
+  background-color: #0F172A !important;
+  color: #E2E8F0 !important;
+}
+
+.dark body {
+  background-color: #0F172A !important;
+  color: #E2E8F0 !important;
+}
+
+.dark * {
+  color: inherit;
+}
+
+/* Override all text colors in dark mode */
+.dark [class*="text-slate"],
+.dark [class*="text-gray"] {
+  color: #E2E8F0 !important;
+}
+
+/* Background colors */
+.dark .bg-white {
+  background-color: #1E293B !important;
+}
+
+.dark .bg-slate-50 {
+  background-color: #334155 !important;
+}
+
+.dark .bg-slate-100 {
+  background-color: #475569 !important;
+}
+
+.dark .bg-slate-200 {
+  background-color: #64748B !important;
+}
+
+.dark .bg-\[#f5f7fa\] {
+  background-color: #0F172A !important;
+}
+
+.dark .bg-\[#F8FAFC\] {
+  background-color: #0F172A !important;
+}
+
+.dark .bg-gray-50 {
+  background-color: #334155 !important;
+}
+
+.dark .bg-gray-100 {
+  background-color: #475569 !important;
+}
+
+/* Ensure main containers have dark backgrounds */
+.dark main {
+  background-color: #0F172A !important;
+}
+
+.dark .min-h-screen {
+  background-color: #0F172A !important;
+}
+
+.dark .flex-1 {
+  background-color: inherit;
+}
+
+/* Header backgrounds */
+.dark header {
+  background-color: #1E293B !important;
+  border-color: #334155 !important;
+}
+
+/* Text colors */
+.dark .text-slate-900,
+.dark h1.text-slate-900,
+.dark h2.text-slate-900,
+.dark h3.text-slate-900,
+.dark p.text-slate-900 {
+  color: #F1F5F9 !important;
+}
+
+.dark .text-slate-800,
+.dark h1.text-slate-800,
+.dark h2.text-slate-800,
+.dark h3.text-slate-800,
+.dark p.text-slate-800,
+.dark .font-semibold.text-slate-800,
+.dark .font-bold.text-slate-800 {
+  color: #E2E8F0 !important;
+}
+
+.dark .text-slate-700,
+.dark h1.text-slate-700,
+.dark h2.text-slate-700,
+.dark h3.text-slate-700,
+.dark td.text-slate-700 {
+  color: #CBD5E1 !important;
+}
+
+.dark .text-slate-600,
+.dark td.text-slate-600 {
+  color: #94A3B8 !important;
+}
+
+.dark .text-slate-500,
+.dark p.text-slate-500 {
+  color: #64748B !important;
+}
+
+.dark .text-slate-400 {
+  color: #475569 !important;
+}
+
+.dark .text-gray-900 {
+  color: #F1F5F9 !important;
+}
+
+.dark .text-gray-800 {
+  color: #E2E8F0 !important;
+}
+
+.dark .text-gray-700 {
+  color: #CBD5E1 !important;
+}
+
+.dark .text-gray-600 {
+  color: #94A3B8 !important;
+}
+
+.dark .text-gray-500 {
+  color: #64748B !important;
+}
+
+.dark .text-black {
+  color: #F1F5F9 !important;
+}
+
+/* Ensure all text elements inherit proper colors */
+.dark h1,
+.dark h2,
+.dark h3,
+.dark h4,
+.dark h5,
+.dark h6 {
+  color: #F1F5F9 !important;
+}
+
+.dark p {
+  color: #CBD5E1 !important;
+}
+
+.dark span {
+  color: inherit;
+}
+
+.dark label {
+  color: #E2E8F0 !important;
+}
+
+.dark a {
+  color: #94A3B8;
+}
+
+.dark a:hover {
+  color: #F97316;
+}
+
+/* Force all text to be light in dark mode */
+.dark * {
+  border-color: inherit;
+}
+
+.dark div,
+.dark td,
+.dark th {
+  color: inherit;
+}
+
+/* Border colors */
+.dark .border-slate-200 {
+  border-color: #334155 !important;
+}
+
+.dark .border-slate-100 {
+  border-color: #1E293B !important;
+}
+
+.dark .border-gray-200 {
+  border-color: #334155 !important;
+}
+
+.dark .border-gray-100 {
+  border-color: #1E293B !important;
+}
+
+/* Hover states */
+.dark .hover\:bg-slate-50:hover {
+  background-color: #334155 !important;
+}
+
+.dark .hover\:bg-slate-100:hover {
+  background-color: #475569 !important;
+}
+
+.dark .hover\:bg-slate-200:hover {
+  background-color: #64748B !important;
+}
+
+.dark .hover\:bg-gray-50:hover {
+  background-color: #334155 !important;
+}
+
+.dark .hover\:bg-gray-100:hover {
+  background-color: #475569 !important;
+}
+
+.dark .hover\:text-slate-900:hover {
+  color: #F1F5F9 !important;
+}
+
+.dark .hover\:text-slate-700:hover {
+  color: #CBD5E1 !important;
+}
+
+.dark .hover\:text-orange-600:hover {
+  color: #F97316 !important;
+}
+
+.dark .hover\:text-orange-700:hover {
+  color: #F97316 !important;
+}
+
+/* Input and form elements */
+.dark input,
+.dark textarea,
+.dark select {
+  background-color: #1E293B !important;
+  border-color: #334155 !important;
+  color: #E2E8F0 !important;
+}
+
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: #64748B !important;
+}
+
+.dark input:focus,
+.dark textarea:focus,
+.dark select:focus {
+  border-color: #F97316 !important;
+  background-color: #1E293B !important;
+}
+
+/* Buttons */
+.dark button {
+  color: inherit;
+}
+
+.dark button.bg-slate-100,
+.dark button.bg-slate-50 {
+  color: #E2E8F0 !important;
+}
+
+.dark button.text-slate-700,
+.dark button.text-slate-600 {
+  color: #CBD5E1 !important;
+}
+
+.dark button .material-icons-round {
+  color: inherit;
+}
+
+/* Icon containers in dark mode */
+.dark .bg-orange-100 {
+  background-color: rgba(249, 115, 22, 0.2) !important;
+}
+
+.dark .bg-blue-100 {
+  background-color: rgba(59, 130, 246, 0.2) !important;
+}
+
+.dark .bg-green-100 {
+  background-color: rgba(16, 185, 129, 0.2) !important;
+}
+
+.dark .bg-purple-100 {
+  background-color: rgba(139, 92, 246, 0.2) !important;
+}
+
+.dark .bg-yellow-100 {
+  background-color: rgba(234, 179, 8, 0.2) !important;
+}
+
+.dark .bg-red-100 {
+  background-color: rgba(239, 68, 68, 0.2) !important;
+}
+
+.dark .bg-pink-100 {
+  background-color: rgba(236, 72, 153, 0.2) !important;
+}
+
+/* Specific text color overrides for dark mode */
+.dark .font-semibold,
+.dark .font-bold {
+  color: inherit;
+}
+
+/* Ensure Material Icons stay visible */
+.dark .material-icons-round {
+  color: inherit;
+}
+
+/* Icon colors in dark mode */
+.dark .text-slate-600 .material-icons-round,
+.dark .material-icons-round.text-slate-600 {
+  color: #94A3B8 !important;
+}
+
+.dark .text-slate-500 .material-icons-round,
+.dark .material-icons-round.text-slate-500 {
+  color: #64748B !important;
+}
+
+.dark .text-slate-400 .material-icons-round,
+.dark .material-icons-round.text-slate-400 {
+  color: #64748B !important;
+}
+
+/* Specific icon color overrides */
+.dark .text-orange-600,
+.dark .text-orange-500 {
+  color: #F97316 !important;
+}
+
+.dark .text-blue-600 {
+  color: #3B82F6 !important;
+}
+
+.dark .text-green-600 {
+  color: #10B981 !important;
+}
+
+.dark .text-purple-600 {
+  color: #8B5CF6 !important;
+}
+
+.dark .text-yellow-600 {
+  color: #EAB308 !important;
+}
+
+.dark .text-red-600 {
+  color: #EF4444 !important;
+}
+
+/* Sidebar specific */
+.dark aside {
+  background-color: #1E293B !important;
+  border-color: #334155 !important;
+}
+
+.dark aside .border-b {
+  border-color: #334155 !important;
+}
+
+/* Navigation items in dark mode */
+.dark nav a:not(.bg-orange-500) {
+  color: #94A3B8 !important;
+}
+
+.dark nav a:not(.bg-orange-500):hover {
+  background-color: #334155 !important;
+  color: #E2E8F0 !important;
+}
+
+.dark nav a:not(.bg-orange-500) .material-icons-round {
+  color: #94A3B8 !important;
+}
+
+.dark nav a:not(.bg-orange-500):hover .material-icons-round {
+  color: #E2E8F0 !important;
+}
+
+/* SVG icons in dark mode */
+.dark svg {
+  color: inherit;
+}
+
+.dark .text-white svg {
+  color: white !important;
+}
+
+/* Tables */
+.dark table {
+  color: #E2E8F0;
+}
+
+.dark thead {
+  border-color: #334155 !important;
+}
+
+.dark thead th {
+  color: #94A3B8 !important;
+}
+
+.dark tbody tr {
+  border-color: #1E293B !important;
+}
+
+.dark tbody td {
+  color: #CBD5E1 !important;
+}
+
+.dark tbody tr:hover {
+  background-color: #334155 !important;
+}
+
+.dark tbody tr:hover td {
+  color: #E2E8F0 !important;
+}
+
+/* Cards and containers */
+.dark .shadow-sm {
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.3) !important;
+}
+
+.dark .shadow-md {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2) !important;
+}
+
+.dark .shadow-lg {
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -2px rgba(0, 0, 0, 0.2) !important;
+}
+
+.dark .shadow-2xl {
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5) !important;
+}
+
+/* Ensure all divs with specific background classes change */
+.dark div[class*="bg-white"],
+.dark div[class*="bg-slate-50"],
+.dark div[class*="bg-gray-50"] {
+  background-color: #1E293B !important;
+}
+
+.dark div[class*="bg-[#f5f7fa]"],
+.dark div[class*="bg-[#F8FAFC]"] {
+  background-color: #0F172A !important;
+}
+
+/* Modal overlay */
+.dark .bg-black {
+  background-color: rgba(0, 0, 0, 0.8) !important;
+}
+
+/* Modal content */
+.dark .rounded-2xl {
+  background-color: #1E293B !important;
+}
+
+/* Modal selected states */
+.dark .border-orange-500 {
+  border-color: #F97316 !important;
+}
+
+.dark .bg-orange-50 {
+  background-color: rgba(249, 115, 22, 0.15) !important;
+}
+
+/* Ensure modal text is visible */
+.dark .fixed .bg-white {
+  background-color: #1E293B !important;
+}
+
+.dark .fixed h2,
+.dark .fixed h3,
+.dark .fixed label,
+.dark .fixed p {
+  color: #E2E8F0 !important;
+}
+
+/* Modal buttons and checkboxes */
+.dark .fixed button:not(.bg-orange-500) {
+  background-color: #334155 !important;
+  color: #E2E8F0 !important;
+}
+
+.dark .fixed button:not(.bg-orange-500):hover {
+  background-color: #475569 !important;
+}
+
+/* Selected feature boxes in modal */
+.dark .fixed .border-orange-500.bg-orange-50 {
+  background-color: rgba(249, 115, 22, 0.2) !important;
+  border-color: #F97316 !important;
+}
+
+.dark .fixed .border-orange-500.bg-orange-50 span {
+  color: #E2E8F0 !important;
+}
+
+.dark .fixed .border-slate-200 {
+  border-color: #475569 !important;
+  background-color: #1E293B !important;
+}
+
+.dark .fixed .border-slate-200:hover {
+  border-color: #64748B !important;
+}
+
+/* Recharts dark mode */
+.dark .recharts-cartesian-grid-horizontal line,
+.dark .recharts-cartesian-grid-vertical line {
+  stroke: #334155 !important;
+}
+
+.dark .recharts-text {
+  fill: #94A3B8 !important;
+}
+
+/* Keep orange/green/red/yellow colors as they are for status indicators */
+.dark .bg-orange-50,
+.dark .bg-orange-100,
+.dark .bg-orange-500,
+.dark .bg-green-50,
+.dark .bg-green-100,
+.dark .bg-green-500,
+.dark .bg-green-600,
+.dark .bg-red-50,
+.dark .bg-red-100,
+.dark .bg-red-500,
+.dark .bg-yellow-50,
+.dark .bg-yellow-100,
+.dark .bg-yellow-400,
+.dark .bg-yellow-500,
+.dark .bg-blue-50,
+.dark .bg-blue-100,
+.dark .bg-purple-50,
+.dark .bg-purple-100,
+.dark .bg-purple-500,
+.dark .bg-pink-100 {
+  /* Keep original colors for status badges and buttons */
+}
+
+.sidebar-item-active {
+  background-color: #F97316;
+  color: white;
+}
+
+.chart-bar {
+  transition: height 0.3s ease;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e0;
+  border-radius: 3px;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: #475569;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a0aec0;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #64748B;
+}

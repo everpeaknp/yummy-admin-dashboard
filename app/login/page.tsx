@@ -1,12 +1,20 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { Suspense, useEffect, useState, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { LockKeyhole, Mail, Eye, EyeOff } from "lucide-react";
 import Card from "@/components/Card";
 import { clearAuthSession, getStoredAuthSession, isSuperadminSession, loginWithPassword, saveAuthSession } from "@/lib/auth";
 
 export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginPageContent />
+    </Suspense>
+  );
+}
+
+function LoginPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [email, setEmail] = useState("");

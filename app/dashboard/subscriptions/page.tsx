@@ -403,7 +403,9 @@ export default function SubscriptionsPage() {
               <div className="w-11 h-11 bg-yellow-50 rounded-lg flex items-center justify-center">
                 <span className="material-icons-round text-yellow-600 text-[22px]">emoji_events</span>
               </div>
-              <span className="text-xs font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded">Next 14 days</span>
+              <span className="text-xs font-semibold px-2 py-0.5 rounded bg-amber-500/15 text-amber-100 border border-amber-500/30">
+                Next 14 days
+              </span>
             </div>
             <p className="text-xs text-slate-500 mb-1">Expiring Soon</p>
             <p className="text-2xl font-bold text-slate-900">{metrics.expiringSoon}</p>

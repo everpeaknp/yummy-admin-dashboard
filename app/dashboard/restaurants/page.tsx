@@ -2,9 +2,52 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { Building, Hotel, MapPin, Pencil, Phone, Search, Utensils } from "lucide-react";
+import { MapPin, Pencil, Phone, Search, Utensils } from "lucide-react";
 import { getRestaurants, type BackendRestaurant } from "@/lib/backend-api";
 import RestaurantAvatar from "@/components/RestaurantAvatar";
+
+function formatExpiryDate(value?: string | null): string {
+  if (!value) return "-";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+
+  return new Intl.DateTimeFormat("en-GB", {
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: "UTC",
+  }).format(parsed);
+}
+
+function getExpiryCellData(restaurant: BackendRestaurant): { label: string; value: string } {
+  const planState = (restaurant.plan_state || "").toLowerCase();
+  const billingMode = (restaurant.billing_mode || "").toLowerCase();
+  const isTrialPlan = planState.includes("trial") || billingMode === "trial_paid";
+  const isPaidPlan = billingMode === "paid" || planState === "paid";
+
+  if (isTrialPlan) {
+    return {
+      label: "Trial",
+      value: formatExpiryDate(restaurant.trial_ends_at),
+    };
+  }
+
+  if (isPaidPlan) {
+    return {
+      label: "Paid",
+      value: formatExpiryDate(restaurant.paid_ends_at),
+    };
+  }
+
+  const fallback = restaurant.paid_ends_at || restaurant.trial_ends_at || null;
+  return {
+    label: "Plan",
+    value: formatExpiryDate(fallback),
+  };
+}
 
 export default function RestaurantsPage() {
   const [restaurantsList, setRestaurantsList] = useState<BackendRestaurant[]>([]);
@@ -175,8 +218,10 @@ export default function RestaurantsPage() {
                     </td>
                   </tr>
                 ) : filteredRestaurants.length ? (
-                  filteredRestaurants.map((restaurant) => (
-                    <tr key={restaurant.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                  filteredRestaurants.map((restaurant) => {
+                    const expiry = getExpiryCellData(restaurant);
+                    return (
+                      <tr key={restaurant.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
                           <RestaurantAvatar
@@ -222,7 +267,10 @@ export default function RestaurantsPage() {
                         </div>
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
-                        {restaurant.trial_ends_at || restaurant.paid_ends_at || "-"}
+                        <div className="space-y-1">
+                          <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">{expiry.label}</p>
+                          <p>{expiry.value}</p>
+                        </div>
                       </td>
                       <td className="px-6 py-4 text-right">
                         <Link
@@ -233,8 +281,9 @@ export default function RestaurantsPage() {
                           Edit
                         </Link>
                       </td>
-                    </tr>
-                  ))
+                      </tr>
+                    );
+                  })
                 ) : (
                   <tr>
                     <td className="px-6 py-8 text-sm text-gray-500 dark:text-gray-400" colSpan={7}>

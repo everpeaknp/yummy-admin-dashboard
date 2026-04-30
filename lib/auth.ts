@@ -15,6 +15,33 @@ export type AuthSession = {
   hasPassword: boolean;
 };
 
+function getSuperadminEmailAllowlist(): string[] {
+  const raw = (process.env.NEXT_PUBLIC_SUPERADMIN_EMAILS || "").trim();
+  if (!raw) return [];
+  return raw
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+export function isSuperadminSession(session: Pick<AuthSession, "email" | "primaryRole" | "userRoles">): boolean {
+  const primary = (session.primaryRole || "").toLowerCase();
+  const roles = (session.userRoles || []).map((r) => String(r || "").toLowerCase());
+  if (primary === "superadmin" || roles.includes("superadmin")) {
+    return true;
+  }
+
+  // Optional fallback for legacy environments. Disabled by default.
+  const allowFallback =
+    String(process.env.NEXT_PUBLIC_ALLOW_SUPERADMIN_EMAIL_FALLBACK || "").toLowerCase() === "true";
+  if (!allowFallback) return false;
+
+  // Backwards-compatible fallback when backend does not expose superadmin identity yet.
+  const allow = getSuperadminEmailAllowlist();
+  if (allow.length === 0) return false;
+  return allow.includes((session.email || "").trim().toLowerCase());
+}
+
 export type LoginResponse = {
   access_token: string;
   token_type: string;
@@ -99,21 +126,47 @@ export function clearAuthSession() {
 }
 
 export async function loginWithPassword(email: string, password: string) {
-  const response = await fetch(`${backendUrl()}/auth/login`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: new URLSearchParams({
-      username: email,
-      password,
-      grant_type: "password",
-    }),
-  });
+  const doLoginRequest = (username: string, secret: string) =>
+    fetch(`${backendUrl()}/auth/superadmin/login`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        username,
+        password: secret,
+        grant_type: "password",
+      }),
+    });
+
+  // Preserve original input first; on auth failure we retry once with trimmed values
+  // to handle accidental leading/trailing whitespace from paste/autofill.
+  const rawUsername = email;
+  const trimmedUsername = email.trim();
+  const rawPassword = password;
+  const trimmedPassword = password.trim();
+
+  let response = await doLoginRequest(rawUsername, rawPassword);
+  if (
+    !response.ok &&
+    response.status === 401 &&
+    (rawUsername !== trimmedUsername || rawPassword !== trimmedPassword)
+  ) {
+    response = await doLoginRequest(trimmedUsername, trimmedPassword);
+  }
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(errorText || "Login failed");
+    try {
+      const parsed = JSON.parse(errorText) as {
+        detail?: string;
+        message?: string;
+      };
+      const message = parsed?.detail || parsed?.message;
+      throw new Error(message || "Login failed");
+    } catch {
+      throw new Error(errorText || "Login failed");
+    }
   }
 
   return response.json() as Promise<BaseResponse<LoginResponse>>;

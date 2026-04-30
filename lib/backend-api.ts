@@ -348,6 +348,8 @@ export type RestaurantUpdatePayload = Partial<Pick<
   | "restaurant_enabled"
   | "kot_station_config"
   | "local_pos_ip"
+  | "trial_ends_at"
+  | "paid_ends_at"
 >> & {
   payment_qrs?: Array<{ name: string; payload: string }>;
 };

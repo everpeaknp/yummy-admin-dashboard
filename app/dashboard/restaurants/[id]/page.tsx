@@ -20,6 +20,8 @@ type RestaurantFormState = {
   hotel_enabled: boolean;
   kot_enabled: boolean;
   tax_enabled: boolean;
+  trial_ends_at: string;
+  paid_ends_at: string;
 };
 
 const emptyForm: RestaurantFormState = {
@@ -35,7 +37,32 @@ const emptyForm: RestaurantFormState = {
   hotel_enabled: false,
   kot_enabled: true,
   tax_enabled: true,
+  trial_ends_at: "",
+  paid_ends_at: "",
 };
+
+function formatDateTimeInput(value?: string | null) {
+  if (!value) {
+    return "";
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return "";
+  }
+  const local = new Date(parsed.getTime() - parsed.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 16);
+}
+
+function toIsoString(value: string) {
+  if (!value) {
+    return null;
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+  return parsed.toISOString();
+}
 
 function toFormState(restaurant: BackendRestaurant): RestaurantFormState {
   return {
@@ -51,6 +78,8 @@ function toFormState(restaurant: BackendRestaurant): RestaurantFormState {
     hotel_enabled: Boolean(restaurant.hotel_enabled),
     kot_enabled: Boolean(restaurant.kot_enabled),
     tax_enabled: Boolean(restaurant.tax_enabled),
+    trial_ends_at: formatDateTimeInput(restaurant.trial_ends_at),
+    paid_ends_at: formatDateTimeInput(restaurant.paid_ends_at),
   };
 }
 
@@ -137,6 +166,15 @@ export default function RestaurantDetailPage() {
       tax_enabled: form.tax_enabled,
     };
 
+    const trialEndsAt = toIsoString(form.trial_ends_at);
+    const paidEndsAt = toIsoString(form.paid_ends_at);
+    if (trialEndsAt) {
+      payload.trial_ends_at = trialEndsAt;
+    }
+    if (paidEndsAt) {
+      payload.paid_ends_at = paidEndsAt;
+    }
+
     try {
       const token = window.localStorage.getItem("accessToken") || undefined;
       const response = await updateRestaurant(restaurant.id, payload, { token });
@@ -145,6 +183,31 @@ export default function RestaurantDetailPage() {
       setSuccess("Restaurant details saved successfully.");
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "Failed to save restaurant details");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const saveBillingMode = async (mode: RestaurantFormState["billing_mode"]) => {
+    if (!restaurant) return;
+
+    // Immediate feedback.
+    setForm((prev) => ({ ...prev, billing_mode: mode }));
+    setIsSaving(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const token = window.localStorage.getItem("accessToken") || undefined;
+      const response = await updateRestaurant(restaurant.id, { billing_mode: mode }, { token });
+      setRestaurant(response.data);
+      setForm((prev) => ({
+        ...prev,
+        billing_mode: (response.data.billing_mode as RestaurantFormState["billing_mode"]) || mode,
+      }));
+      setSuccess("Billing status updated.");
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : "Failed to update billing status");
     } finally {
       setIsSaving(false);
     }
@@ -245,25 +308,40 @@ export default function RestaurantDetailPage() {
               label="Paid"
               description="Full subscription active"
               active={form.billing_mode === "paid"}
-              onClick={() => setForm((prev) => ({ ...prev, billing_mode: "paid" }))}
+              onClick={() => saveBillingMode("paid")}
             />
             <BillingToggle
               label="Unpaid"
               description="Disable paid access / mark free"
               active={form.billing_mode === "free"}
-              onClick={() => setForm((prev) => ({ ...prev, billing_mode: "free" }))}
+              onClick={() => saveBillingMode("free")}
             />
             <BillingToggle
               label="Trial"
               description="Trial paid access"
               active={form.billing_mode === "trial_paid"}
-              onClick={() => setForm((prev) => ({ ...prev, billing_mode: "trial_paid" }))}
+              onClick={() => saveBillingMode("trial_paid")}
             />
           </div>
 
           <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
             <h3 className="text-sm font-semibold text-slate-900">Current billing mode</h3>
             <p className="mt-2 text-sm text-slate-600">{form.billing_mode}</p>
+          </div>
+
+          <div className="mt-6 grid grid-cols-1 gap-4">
+            <DateTimeField
+              label="Trial ends at"
+              value={form.trial_ends_at}
+              onChange={(value) => setForm((prev) => ({ ...prev, trial_ends_at: value }))}
+              helper="Sets when the free trial ends."
+            />
+            <DateTimeField
+              label="Paid ends at"
+              value={form.paid_ends_at}
+              onChange={(value) => setForm((prev) => ({ ...prev, paid_ends_at: value }))}
+              helper="Sets when the paid period ends."
+            />
           </div>
         </Card>
 
@@ -352,6 +430,31 @@ function Field({
           className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-orange-400"
         />
       )}
+    </label>
+  );
+}
+
+function DateTimeField({
+  label,
+  value,
+  onChange,
+  helper,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  helper?: string;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-2 block text-sm font-semibold text-slate-700">{label}</span>
+      <input
+        type="datetime-local"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-orange-400"
+      />
+      {helper ? <p className="mt-2 text-xs text-slate-500">{helper}</p> : null}
     </label>
   );
 }

@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 
 const DEFAULT_BACKEND_URL =
-  "https://yummy-container-app.ambitiouspebble-f5ba67fe.southeastasia.azurecontainerapps.io";
+  "https://api.yummyever.com";
 
 const HOP_BY_HOP_HEADERS = new Set([
   "connection",
@@ -22,6 +22,8 @@ const RESPONSE_HEADERS_TO_STRIP = new Set([
 
 function getBackendBaseUrl() {
   return (
+    process.env.BACKEND_API_URL ||
+    process.env.NEXT_PUBLIC_API_URL ||
     process.env.BACKEND_URL ||
     process.env.NEXT_PUBLIC_BACKEND_URL ||
     DEFAULT_BACKEND_URL

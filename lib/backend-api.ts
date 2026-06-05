@@ -542,15 +542,15 @@ export type LeadRecipientCreatePayload = {
 
 export async function getLeadRecipients(
   options: BackendClientOptions = {},
-): Promise<BaseResponse<LeadRecipientRead[]>> {
-  return backendFetch<BaseResponse<LeadRecipientRead[]>>("/lead-recipients", options);
+): Promise<LeadRecipientRead[]> {
+  return backendFetch<LeadRecipientRead[]>("/lead-recipients", options);
 }
 
 export async function addLeadRecipient(
   payload: LeadRecipientCreatePayload,
   options: BackendClientOptions = {},
-): Promise<BaseResponse<LeadRecipientRead>> {
-  return backendRequest<BaseResponse<LeadRecipientRead>>("/lead-recipients", {
+): Promise<LeadRecipientRead> {
+  return backendRequest<LeadRecipientRead>("/lead-recipients", {
     ...options,
     method: "POST",
     body: payload,
@@ -560,8 +560,8 @@ export async function addLeadRecipient(
 export async function removeLeadRecipient(
   recipientId: number,
   options: BackendClientOptions = {},
-): Promise<BaseResponse<Record<string, unknown>>> {
-  return backendRequest<BaseResponse<Record<string, unknown>>>(
+): Promise<Record<string, unknown>> {
+  return backendRequest<Record<string, unknown>>(
     `/lead-recipients/${recipientId}`,
     {
       ...options,
@@ -573,8 +573,8 @@ export async function removeLeadRecipient(
 export async function toggleLeadRecipient(
   recipientId: number,
   options: BackendClientOptions = {},
-): Promise<BaseResponse<LeadRecipientRead>> {
-  return backendRequest<BaseResponse<LeadRecipientRead>>(
+): Promise<LeadRecipientRead> {
+  return backendRequest<LeadRecipientRead>(
     `/lead-recipients/${recipientId}/toggle`,
     {
       ...options,

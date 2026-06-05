@@ -63,7 +63,7 @@ export default function LeadsPage() {
     try {
       setRecipientsLoading(true);
       const response = await getLeadRecipients({ token: authToken });
-      setRecipients(response.data || []);
+      setRecipients(response || []);
       setRecipientsError(null);
     } catch (err) {
       setRecipientsError(err instanceof Error ? err.message : "Failed to load recipients.");

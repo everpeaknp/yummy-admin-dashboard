@@ -508,3 +508,77 @@ export async function removeRestaurantAdmin(
     },
   );
 }
+
+// ==========================================
+// Lead Generation
+// ==========================================
+
+export type LeadRead = {
+  id: number;
+  name: string;
+  email: string;
+  phone?: string | null;
+  restaurant_name?: string | null;
+  created_at: string;
+};
+
+export async function getLeads(
+  options: BackendClientOptions = {},
+): Promise<LeadRead[]> {
+  return backendFetch<LeadRead[]>("/leads", options);
+}
+
+export type LeadRecipientRead = {
+  id: number;
+  email: string;
+  name?: string | null;
+  is_active: boolean;
+};
+
+export type LeadRecipientCreatePayload = {
+  email: string;
+  name?: string;
+};
+
+export async function getLeadRecipients(
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<LeadRecipientRead[]>> {
+  return backendFetch<BaseResponse<LeadRecipientRead[]>>("/lead-recipients", options);
+}
+
+export async function addLeadRecipient(
+  payload: LeadRecipientCreatePayload,
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<LeadRecipientRead>> {
+  return backendRequest<BaseResponse<LeadRecipientRead>>("/lead-recipients", {
+    ...options,
+    method: "POST",
+    body: payload,
+  });
+}
+
+export async function removeLeadRecipient(
+  recipientId: number,
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<Record<string, unknown>>> {
+  return backendRequest<BaseResponse<Record<string, unknown>>>(
+    `/lead-recipients/${recipientId}`,
+    {
+      ...options,
+      method: "DELETE",
+    },
+  );
+}
+
+export async function toggleLeadRecipient(
+  recipientId: number,
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<LeadRecipientRead>> {
+  return backendRequest<BaseResponse<LeadRecipientRead>>(
+    `/lead-recipients/${recipientId}/toggle`,
+    {
+      ...options,
+      method: "PATCH",
+    },
+  );
+}

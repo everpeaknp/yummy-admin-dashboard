@@ -21,13 +21,16 @@ const RESPONSE_HEADERS_TO_STRIP = new Set([
 ]);
 
 function getBackendBaseUrl() {
-  return (
+  const raw = (
     process.env.BACKEND_API_URL ||
     process.env.NEXT_PUBLIC_API_URL ||
     process.env.BACKEND_URL ||
     process.env.NEXT_PUBLIC_BACKEND_URL ||
     DEFAULT_BACKEND_URL
-  ).replace(/\/$/, "");
+  ).trim();
+
+  const withScheme = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+  return withScheme.replace(/\/$/, "");
 }
 
 async function proxyRequest(request: NextRequest, pathSegments: string[]) {

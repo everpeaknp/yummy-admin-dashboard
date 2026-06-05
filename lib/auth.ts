@@ -1,4 +1,4 @@
-import { DEFAULT_BACKEND_URL, type BaseResponse } from "@/lib/backend-api";
+import { type BaseResponse } from "@/lib/backend-api";
 
 export type AuthSession = {
   accessToken: string;
@@ -59,10 +59,70 @@ export type LoginResponse = {
 
 const AUTH_STORAGE_KEY = "yummy_auth_session";
 const AUTH_PROXY_BASE_URL = "/api/backend";
+const DIRECT_BACKEND_URL =
+  process.env.NEXT_PUBLIC_API_URL ||
+  process.env.NEXT_PUBLIC_BACKEND_URL ||
+  "https://api.yummyever.com";
 
-function backendUrl() {
-  const directBackend = process.env.NEXT_PUBLIC_BACKEND_URL || DEFAULT_BACKEND_URL;
-  return (AUTH_PROXY_BASE_URL || directBackend).replace(/\/$/, "");
+function proxyBackendUrl() {
+  return AUTH_PROXY_BASE_URL.replace(/\/$/, "");
+}
+
+function directBackendUrl() {
+  const raw = DIRECT_BACKEND_URL.trim();
+  const withScheme = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+  return withScheme.replace(/\/$/, "");
+}
+
+async function postLogin(
+  baseUrl: string,
+  route: string,
+  username: string,
+  secret: string,
+) {
+  return fetch(`${baseUrl}${route}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams({
+      username,
+      password: secret,
+      grant_type: "password",
+    }),
+  });
+}
+
+async function loginRequestWithFallback(
+  username: string,
+  password: string,
+) {
+  const candidates = [
+    { base: proxyBackendUrl(), route: "/auth/superadmin/login" },
+    { base: proxyBackendUrl(), route: "/auth/login" },
+    { base: directBackendUrl(), route: "/auth/superadmin/login" },
+    { base: directBackendUrl(), route: "/auth/login" },
+  ];
+
+  let lastResponse: Response | null = null;
+  let lastNetworkError: unknown = null;
+
+  for (const c of candidates) {
+    try {
+      const response = await postLogin(c.base, c.route, username, password);
+      lastResponse = response;
+      if (response.ok) return response;
+      // Move to fallback on upstream/proxy failures and missing routes.
+      if ([404, 502, 503, 504].includes(response.status)) continue;
+      return response;
+    } catch (err) {
+      lastNetworkError = err;
+      continue;
+    }
+  }
+
+  if (lastResponse) return lastResponse;
+  throw lastNetworkError || new Error("Login request failed");
 }
 
 export function getStoredAuthSession(): AuthSession | null {
@@ -126,19 +186,6 @@ export function clearAuthSession() {
 }
 
 export async function loginWithPassword(email: string, password: string) {
-  const doLoginRequest = (username: string, secret: string) =>
-    fetch(`${backendUrl()}/auth/superadmin/login`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: new URLSearchParams({
-        username,
-        password: secret,
-        grant_type: "password",
-      }),
-    });
-
   // Preserve original input first; on auth failure we retry once with trimmed values
   // to handle accidental leading/trailing whitespace from paste/autofill.
   const rawUsername = email;
@@ -146,13 +193,13 @@ export async function loginWithPassword(email: string, password: string) {
   const rawPassword = password;
   const trimmedPassword = password.trim();
 
-  let response = await doLoginRequest(rawUsername, rawPassword);
+  let response = await loginRequestWithFallback(rawUsername, rawPassword);
   if (
     !response.ok &&
     response.status === 401 &&
     (rawUsername !== trimmedUsername || rawPassword !== trimmedPassword)
   ) {
-    response = await doLoginRequest(trimmedUsername, trimmedPassword);
+    response = await loginRequestWithFallback(trimmedUsername, trimmedPassword);
   }
 
   if (!response.ok) {
@@ -173,7 +220,7 @@ export async function loginWithPassword(email: string, password: string) {
 }
 
 export async function refreshAuthToken(refreshToken: string) {
-  const response = await fetch(`${backendUrl()}/auth/refresh`, {
+  const response = await fetch(`${proxyBackendUrl()}/auth/refresh`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -197,7 +244,7 @@ export async function logoutSession() {
   }
 
   try {
-    await fetch(`${backendUrl()}/auth/logout`, {
+    await fetch(`${proxyBackendUrl()}/auth/logout`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

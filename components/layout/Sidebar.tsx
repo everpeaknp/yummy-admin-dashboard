@@ -9,10 +9,12 @@ import {
   Package,
   Receipt,
   Settings,
+  Users,
 } from "lucide-react";
 
 const menuItems = [
   { href: "/dashboard/overview", label: "Overview", icon: LayoutDashboard },
+  { href: "/dashboard/leads", label: "Leads", icon: Users },
   { href: "/dashboard/restaurants", label: "Restaurants", icon: Store },
   { href: "/dashboard/subscriptions", label: "Subscriptions", icon: Package },
   { href: "/dashboard/payments", label: "Payments", icon: CreditCard },

@@ -32,6 +32,7 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarPr
 
   const menuItems = [
     { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
+    { href: "/dashboard/leads", label: "Leads", icon: Users },
     { href: "/dashboard/restaurants", label: "Restaurants", icon: Building2 },
     { href: "/dashboard/plans", label: "Plans & Billing", icon: CreditCard },
     { href: "/dashboard/subscriptions", label: "Subscriptions", icon: Repeat },

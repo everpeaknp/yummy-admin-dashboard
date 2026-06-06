@@ -64,12 +64,7 @@ function getSuperadminEmailAllowlist(): string[] {
 export function isSuperadminSession(session: Pick<AuthSession, "email" | "primaryRole" | "userRoles">): boolean {
   const primary = normalizedPrimaryRole(session);
   const roles = normalizedRoles(session);
-  if (
-    primary === "superadmin" || 
-    roles.includes("superadmin") || 
-    primary === "platform_staff" || 
-    roles.includes("platform_staff")
-  ) {
+  if (primary === "superadmin" || roles.includes("superadmin")) {
     return true;
   }
 
@@ -82,6 +77,23 @@ export function isSuperadminSession(session: Pick<AuthSession, "email" | "primar
   const allow = getSuperadminEmailAllowlist();
   if (allow.length === 0) return false;
   return allow.includes((session.email || "").trim().toLowerCase());
+}
+
+export function canAccessAdminDashboard(
+  session: Pick<AuthSession, "email" | "primaryRole" | "userRoles" | "permissions"> | null | undefined,
+): boolean {
+  if (!session) return false;
+  if (isSuperadminSession(session)) return true;
+  if (!isPlatformStaffSession(session)) return false;
+  return hasAnyPermission(session, [
+    "platform.restaurants.view",
+    "platform.restaurants.manage",
+    "platform.leads.view",
+    "platform.leads.manage",
+    "platform.staff.view",
+    "platform.staff.manage",
+    "platform.billing.manage",
+  ]);
 }
 
 export function canManageRestaurants(session: AuthSession | null | undefined): boolean {

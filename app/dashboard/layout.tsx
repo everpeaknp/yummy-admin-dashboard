@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
-import { clearAuthSession, isSuperadminSession, type AuthSession } from "@/lib/auth";
+import { canAccessAdminDashboard, clearAuthSession, type AuthSession } from "@/lib/auth";
 import { Menu, X } from "lucide-react";
 
 const AUTH_STORAGE_KEY = "yummy_auth_session";
@@ -65,10 +65,10 @@ export default function DashboardLayout({
       return;
     }
 
-    // This app is the *superadmin* console. Restaurant-level admins must not
+    // This app is the platform admin console. Restaurant-level admins must not
     // be able to access it even if they can authenticate against the backend.
     if (session) {
-      if (!isSuperadminSession(session)) {
+      if (!canAccessAdminDashboard(session)) {
         clearAuthSession();
         router.replace("/login?reason=unauthorized");
       }

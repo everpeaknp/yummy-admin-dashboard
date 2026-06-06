@@ -19,6 +19,7 @@ import Card from "@/components/Card";
 import KPICard from "@/components/KPICard";
 import RestaurantAvatar from "@/components/RestaurantAvatar";
 import { getPlatformDashboard, getRestaurants, type BackendRestaurant, type PlatformDashboardResponse } from "@/lib/backend-api";
+import { canManageRestaurants, getStoredAuthSession } from "@/lib/auth";
 
 const palette = ["#f97316", "#2563eb", "#8b5cf6", "#14b8a6", "#ef4444", "#f59e0b"];
 
@@ -36,12 +37,26 @@ export default function OverviewPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [fallbackNote, setFallbackNote] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [userName, setUserName] = useState("Main Admin");
+  const [userRole, setUserRole] = useState("Superadmin");
 
   useEffect(() => {
     let alive = true;
 
     async function loadDashboard() {
       const token = window.localStorage.getItem("accessToken") || undefined;
+      const sessionRaw = window.localStorage.getItem("yummy_auth_session");
+      if (sessionRaw) {
+        try {
+          const session = JSON.parse(sessionRaw);
+          if (session.user) {
+            setUserName(session.user.name || session.user.email || "Main Admin");
+          }
+          if (session.primaryRole) {
+            setUserRole(titleCase(session.primaryRole.replace(/_/g, " ")));
+          }
+        } catch (e) {}
+      }
 
       const [restaurantsResult, dashboardResult] = await Promise.allSettled([
         getRestaurants({ token }),
@@ -187,10 +202,12 @@ export default function OverviewPage() {
               />
             </div>
             <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-orange-500 text-sm font-bold text-white">AW</div>
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-orange-500 text-sm font-bold text-white uppercase">
+                {userName.split(" ").map((n) => n[0]).join("").slice(0, 2)}
+              </div>
               <div>
-                <p className="text-sm font-semibold text-slate-900">Main Admin</p>
-                <p className="text-xs text-slate-500">Superadmin</p>
+                <p className="text-sm font-semibold text-slate-900">{userName}</p>
+                <p className="text-xs text-slate-500">{userRole}</p>
               </div>
             </div>
           </div>
@@ -385,13 +402,22 @@ export default function OverviewPage() {
                           <p className="text-xs text-slate-400">{restaurant.timezone}</p>
                         </td>
                         <td className="py-4 text-right">
-                          <Link
-                            href={`/dashboard/restaurants/${restaurant.id}`}
-                            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition-colors hover:border-orange-300 hover:text-orange-600"
-                          >
-                            <PencilIcon />
-                            Edit
-                          </Link>
+                          {canManageRestaurants(getStoredAuthSession()) ? (
+                            <Link
+                              href={`/dashboard/restaurants/${restaurant.id}`}
+                              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition-colors hover:border-orange-300 hover:text-orange-600"
+                            >
+                              <PencilIcon />
+                              Edit
+                            </Link>
+                          ) : (
+                            <Link
+                              href={`/dashboard/restaurants/${restaurant.id}`}
+                              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
+                            >
+                              View
+                            </Link>
+                          )}
                         </td>
                       </tr>
                     ))
@@ -424,8 +450,8 @@ export default function OverviewPage() {
                       <p className="font-semibold text-slate-900">{restaurant.name}</p>
                       <p className="text-xs text-slate-500">{restaurant.address}</p>
                     </div>
-                    <Link href={`/dashboard/restaurants/${restaurant.id}`} className="text-sm font-semibold text-orange-600">
-                      Edit
+                    <Link href={`/dashboard/restaurants/${restaurant.id}`} className="text-sm font-semibold text-orange-600 hover:text-orange-700">
+                      {canManageRestaurants(getStoredAuthSession()) ? "Edit" : "View"}
                     </Link>
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2">

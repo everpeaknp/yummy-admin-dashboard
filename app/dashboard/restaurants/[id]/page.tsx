@@ -6,6 +6,7 @@ import { useParams } from "next/navigation";
 import Card from "@/components/Card";
 import RestaurantAvatar from "@/components/RestaurantAvatar";
 import { getRestaurant, updateRestaurant, type BackendRestaurant, type RestaurantUpdatePayload } from "@/lib/backend-api";
+import { canManageRestaurants, getStoredAuthSession } from "@/lib/auth";
 
 type RestaurantFormState = {
   name: string;
@@ -190,6 +191,10 @@ export default function RestaurantDetailPage() {
 
   const saveBillingMode = async (mode: RestaurantFormState["billing_mode"]) => {
     if (!restaurant) return;
+    if (!canManageRestaurants(getStoredAuthSession())) {
+      setError("You do not have permission to manage billing modes.");
+      return;
+    }
 
     // Immediate feedback.
     setForm((prev) => ({ ...prev, billing_mode: mode }));
@@ -260,23 +265,38 @@ export default function RestaurantDetailPage() {
             </div>
           </div>
           <div className="mt-4 flex flex-wrap gap-2 text-[11px] font-semibold uppercase tracking-wider">
-            <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-600">{restaurant.billing_mode}</span>
-            <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-600">{restaurant.plan_state}</span>
+            {(() => {
+              const isTrialExpired = restaurant.plan_state === "trial_expired" || 
+                (restaurant.billing_mode === "trial_paid" && restaurant.trial_ends_at && new Date(restaurant.trial_ends_at).getTime() < new Date().getTime());
+              
+              return (
+                <>
+                  <span className={`rounded-full px-3 py-1 ${isTrialExpired ? "bg-slate-100 text-slate-600" : "bg-slate-100 text-slate-600"}`}>
+                    {isTrialExpired ? "free" : restaurant.billing_mode}
+                  </span>
+                  <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-600">
+                    {isTrialExpired ? "trial_expired" : restaurant.plan_state}
+                  </span>
+                </>
+              );
+            })()}
             <span className={`rounded-full px-3 py-1 ${restaurant.restaurant_enabled ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>Restaurant</span>
             <span className={`rounded-full px-3 py-1 ${restaurant.hotel_enabled ? "bg-blue-100 text-blue-700" : "bg-slate-100 text-slate-500"}`}>Hotel</span>
           </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          <button
-            type="button"
-            onClick={saveChanges}
-            disabled={isSaving}
-            className="inline-flex items-center gap-2 rounded-xl bg-orange-500 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            <span className="material-icons-round text-[18px]">save</span>
-            {isSaving ? "Saving..." : "Save Changes"}
-          </button>
+          {canManageRestaurants(getStoredAuthSession()) && (
+            <button
+              type="button"
+              onClick={saveChanges}
+              disabled={isSaving}
+              className="inline-flex items-center gap-2 rounded-xl bg-orange-500 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <span className="material-icons-round text-[18px]">save</span>
+              {isSaving ? "Saving..." : "Save Changes"}
+            </button>
+          )}
         </div>
       </div>
 
@@ -355,7 +375,13 @@ export default function RestaurantDetailPage() {
                 key={item.label}
                 label={item.label}
                 enabled={item.enabled}
-                onToggle={() => setForm((prev) => ({ ...prev, [toggleKeyForLabel(item.label)]: !prev[toggleKeyForLabel(item.label)] }))}
+                onToggle={() => {
+                  if (!canManageRestaurants(getStoredAuthSession())) {
+                    setError("You do not have permission to manage service flags.");
+                    return;
+                  }
+                  setForm((prev) => ({ ...prev, [toggleKeyForLabel(item.label)]: !prev[toggleKeyForLabel(item.label)] }))
+                }}
               />
             ))}
           </div>

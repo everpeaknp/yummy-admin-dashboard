@@ -520,12 +520,70 @@ export type LeadRead = {
   phone?: string | null;
   restaurant_name?: string | null;
   created_at: string;
+  is_read: boolean;
 };
 
 export async function getLeads(
   options: BackendClientOptions = {},
 ): Promise<LeadRead[]> {
   return backendFetch<LeadRead[]>("/leads", options);
+}
+
+export type LeadStats = {
+  menus: number;
+  tables: number;
+  orders: number;
+  menu_setup?: LeadSetupBreakdown | null;
+  table_setup?: LeadSetupBreakdown | null;
+};
+
+export type LeadSetupBreakdown = {
+  total: number;
+  default_total: number;
+  default_kept: number;
+  modified: number;
+  extra: number;
+  missing_defaults: number;
+};
+
+export type LeadRestaurantInfo = {
+  name: string;
+  phone?: string | null;
+  address?: string | null;
+  profile_picture?: string | null;
+  cover_photo?: string | null;
+};
+
+export type LeadDetailRead = {
+  id: number;
+  name: string;
+  email: string;
+  phone?: string | null;
+  role?: string | null;
+  auth_provider?: string | null;
+  photo_url?: string | null;
+  created_at: string;
+  is_read: boolean;
+  restaurant?: LeadRestaurantInfo | null;
+  stats: LeadStats;
+};
+
+export async function getLead(
+  leadId: number,
+  options: BackendClientOptions = {},
+): Promise<LeadDetailRead> {
+  return backendFetch<LeadDetailRead>(`/leads/${leadId}`, options);
+}
+
+export async function markLeadsAsRead(
+  leadIds: number[],
+  options: BackendClientOptions = {},
+): Promise<Record<string, unknown>> {
+  return backendRequest<Record<string, unknown>>("/leads/mark-read", {
+    ...options,
+    method: "POST",
+    body: { lead_ids: leadIds },
+  });
 }
 
 export type LeadRecipientRead = {
@@ -579,6 +637,112 @@ export async function toggleLeadRecipient(
     {
       ...options,
       method: "PATCH",
+    },
+  );
+}
+
+export type UserActivityLogRead = {
+  id: number;
+  user_id: number;
+  action: string;
+  entity_type?: string | null;
+  entity_id?: number | null;
+  details?: string | null;
+  ip_address?: string | null;
+  user_agent?: string | null;
+  created_at: string;
+};
+
+export type LeadActivityPageRead = {
+  items: UserActivityLogRead[];
+  total: number;
+  skip: number;
+  limit: number;
+  has_more: boolean;
+};
+
+export async function getLeadActivity(
+  leadId: number,
+  params: { skip?: number; limit?: number } = {},
+  options: BackendClientOptions = {},
+): Promise<LeadActivityPageRead> {
+  const search = new URLSearchParams();
+  if (typeof params.skip === "number") search.set("skip", String(params.skip));
+  if (typeof params.limit === "number") search.set("limit", String(params.limit));
+  const suffix = search.toString() ? `?${search.toString()}` : "";
+  return backendFetch<LeadActivityPageRead>(`/leads/${leadId}/activity${suffix}`, options);
+}
+
+// ==========================================
+// Platform Staff
+// ==========================================
+
+export type PlatformStaffRead = {
+  id: number;
+  name: string;
+  email: string;
+  permissions: string[];
+  is_active: boolean;
+};
+
+export type PlatformStaffCreate = {
+  name: string;
+  email: string;
+  password?: string;
+  permissions: string[];
+};
+
+export type PlatformStaffUpdate = {
+  name?: string;
+  email?: string;
+  permissions?: string[];
+  is_active?: boolean;
+};
+
+export type PlatformStaffPasswordUpdate = {
+  new_password: string;
+};
+
+export async function getPlatformStaff(
+  options: BackendClientOptions = {},
+): Promise<PlatformStaffRead[]> {
+  return backendFetch<PlatformStaffRead[]>("/platform/staff", options);
+}
+
+export async function createPlatformStaff(
+  payload: PlatformStaffCreate,
+  options: BackendClientOptions = {},
+): Promise<PlatformStaffRead> {
+  return backendRequest<PlatformStaffRead>("/platform/staff", {
+    ...options,
+    method: "POST",
+    body: payload,
+  });
+}
+
+export async function updatePlatformStaff(
+  userId: number,
+  payload: PlatformStaffUpdate,
+  options: BackendClientOptions = {},
+): Promise<PlatformStaffRead> {
+  return backendRequest<PlatformStaffRead>(`/platform/staff/${userId}`, {
+    ...options,
+    method: "PATCH",
+    body: payload,
+  });
+}
+
+export async function updatePlatformStaffPassword(
+  userId: number,
+  payload: PlatformStaffPasswordUpdate,
+  options: BackendClientOptions = {},
+): Promise<Record<string, unknown>> {
+  return backendRequest<Record<string, unknown>>(
+    `/platform/staff/${userId}/password`,
+    {
+      ...options,
+      method: "PATCH",
+      body: payload,
     },
   );
 }

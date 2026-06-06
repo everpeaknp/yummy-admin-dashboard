@@ -27,7 +27,12 @@ function getSuperadminEmailAllowlist(): string[] {
 export function isSuperadminSession(session: Pick<AuthSession, "email" | "primaryRole" | "userRoles">): boolean {
   const primary = (session.primaryRole || "").toLowerCase();
   const roles = (session.userRoles || []).map((r) => String(r || "").toLowerCase());
-  if (primary === "superadmin" || roles.includes("superadmin")) {
+  if (
+    primary === "superadmin" || 
+    roles.includes("superadmin") || 
+    primary === "platform_staff" || 
+    roles.includes("platform_staff")
+  ) {
     return true;
   }
 
@@ -40,6 +45,17 @@ export function isSuperadminSession(session: Pick<AuthSession, "email" | "primar
   const allow = getSuperadminEmailAllowlist();
   if (allow.length === 0) return false;
   return allow.includes((session.email || "").trim().toLowerCase());
+}
+
+export function canManageRestaurants(session: AuthSession | null): boolean {
+  if (!session) return false;
+  const primary = (session.primaryRole || "").toLowerCase();
+  const roles = (session.userRoles || []).map((r) => String(r || "").toLowerCase());
+  if (primary === "superadmin" || roles.includes("superadmin")) return true;
+  if (primary === "platform_staff" || roles.includes("platform_staff")) {
+    return session.permissions?.some(p => p === "platform.restaurants.manage" || p === "platform.restaurants.*" || p === "platform.*" || p === "*") || false;
+  }
+  return false;
 }
 
 export type LoginResponse = {

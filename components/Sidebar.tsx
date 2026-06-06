@@ -4,6 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 import { 
   LayoutDashboard, 
   CreditCard,
@@ -13,8 +14,9 @@ import {
   Building2,
   LogOut,
   X,
+  Shield,
 } from "lucide-react";
-import { logoutSession } from "@/lib/auth";
+import { logoutSession, getStoredAuthSession, type AuthSession, isSuperadminSession } from "@/lib/auth";
 
 type SidebarProps = {
   mobileOpen?: boolean;
@@ -24,21 +26,38 @@ type SidebarProps = {
 export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
+  
+  const [session, setSession] = useState<AuthSession | null>(null);
+  
+  useEffect(() => {
+    setSession(getStoredAuthSession());
+  }, []);
 
   const handleLogout = async () => {
     await logoutSession();
     router.replace("/login");
   };
 
-  const menuItems = [
+  const isSuperadmin = session ? isSuperadminSession(session) : false;
+  const permissions = session?.permissions || [];
+
+  const allMenuItems = [
     { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
-    { href: "/dashboard/leads", label: "Leads", icon: Users },
-    { href: "/dashboard/restaurants", label: "Restaurants", icon: Building2 },
-    { href: "/dashboard/plans", label: "Plans & Billing", icon: CreditCard },
-    { href: "/dashboard/subscriptions", label: "Subscriptions", icon: Repeat },
-    { href: "/dashboard/payments", label: "Payments", icon: Wallet },
+    { href: "/dashboard/leads", label: "Leads", icon: Users, permission: "platform.leads.view" },
+    { href: "/dashboard/restaurants", label: "Restaurants", icon: Building2, permission: "platform.restaurants.view" },
+    { href: "/dashboard/plans", label: "Plans & Billing", icon: CreditCard, permission: "platform.billing.manage" },
+    { href: "/dashboard/subscriptions", label: "Subscriptions", icon: Repeat, permission: "platform.billing.manage" },
+    { href: "/dashboard/payments", label: "Payments", icon: Wallet, permission: "platform.billing.manage" },
+    { href: "/dashboard/staff", label: "Platform Staff", icon: Shield, superadminOnly: true },
     { href: "/dashboard/settings", label: "Access & Settings", icon: Users },
   ];
+  
+  const menuItems = allMenuItems.filter(item => {
+    if (isSuperadmin) return true;
+    if (item.superadminOnly) return false;
+    if (item.permission && !permissions.includes(item.permission)) return false;
+    return true;
+  });
 
   const isActive = (href: string) => {
     if (href === "/dashboard") {

@@ -15,6 +15,43 @@ export type AuthSession = {
   hasPassword: boolean;
 };
 
+function normalizedRoles(session: Pick<AuthSession, "primaryRole" | "userRoles">): string[] {
+  return (session.userRoles || []).map((r) => String(r || "").toLowerCase());
+}
+
+function normalizedPrimaryRole(session: Pick<AuthSession, "primaryRole">): string {
+  return (session.primaryRole || "").toLowerCase();
+}
+
+export function hasPermission(
+  session: Pick<AuthSession, "permissions"> | null | undefined,
+  permission: string,
+): boolean {
+  if (!session) return false;
+  const permissions = session.permissions || [];
+  return (
+    permissions.includes(permission) ||
+    permissions.includes("platform.*") ||
+    permissions.includes("*")
+  );
+}
+
+export function hasAnyPermission(
+  session: Pick<AuthSession, "permissions"> | null | undefined,
+  permissions: string[],
+): boolean {
+  return permissions.some((permission) => hasPermission(session, permission));
+}
+
+export function isPlatformStaffSession(
+  session: Pick<AuthSession, "primaryRole" | "userRoles"> | null | undefined,
+): boolean {
+  if (!session) return false;
+  const primary = normalizedPrimaryRole(session);
+  const roles = normalizedRoles(session);
+  return primary === "platform_staff" || roles.includes("platform_staff");
+}
+
 function getSuperadminEmailAllowlist(): string[] {
   const raw = (process.env.NEXT_PUBLIC_SUPERADMIN_EMAILS || "").trim();
   if (!raw) return [];
@@ -25,8 +62,8 @@ function getSuperadminEmailAllowlist(): string[] {
 }
 
 export function isSuperadminSession(session: Pick<AuthSession, "email" | "primaryRole" | "userRoles">): boolean {
-  const primary = (session.primaryRole || "").toLowerCase();
-  const roles = (session.userRoles || []).map((r) => String(r || "").toLowerCase());
+  const primary = normalizedPrimaryRole(session);
+  const roles = normalizedRoles(session);
   if (
     primary === "superadmin" || 
     roles.includes("superadmin") || 
@@ -47,15 +84,29 @@ export function isSuperadminSession(session: Pick<AuthSession, "email" | "primar
   return allow.includes((session.email || "").trim().toLowerCase());
 }
 
-export function canManageRestaurants(session: AuthSession | null): boolean {
+export function canManageRestaurants(session: AuthSession | null | undefined): boolean {
   if (!session) return false;
-  const primary = (session.primaryRole || "").toLowerCase();
-  const roles = (session.userRoles || []).map((r) => String(r || "").toLowerCase());
+  const primary = normalizedPrimaryRole(session);
+  const roles = normalizedRoles(session);
   if (primary === "superadmin" || roles.includes("superadmin")) return true;
   if (primary === "platform_staff" || roles.includes("platform_staff")) {
-    return session.permissions?.some(p => p === "platform.restaurants.manage" || p === "platform.restaurants.*" || p === "platform.*" || p === "*") || false;
+    return hasPermission(session, "platform.restaurants.manage");
   }
   return false;
+}
+
+export function canViewPlatformStaff(session: AuthSession | null | undefined): boolean {
+  if (!session) return false;
+  if (isSuperadminSession(session)) return true;
+  if (!isPlatformStaffSession(session)) return false;
+  return hasAnyPermission(session, ["platform.staff.view", "platform.staff.manage"]);
+}
+
+export function canManagePlatformStaff(session: AuthSession | null | undefined): boolean {
+  if (!session) return false;
+  if (isSuperadminSession(session)) return true;
+  if (!isPlatformStaffSession(session)) return false;
+  return hasPermission(session, "platform.staff.manage");
 }
 
 export type LoginResponse = {

@@ -8,6 +8,12 @@ import {
   updatePlatformStaffPassword,
   type PlatformStaffRead
 } from "@/lib/backend-api";
+import {
+  canManagePlatformStaff,
+  canViewPlatformStaff,
+  getStoredAuthSession,
+  type AuthSession,
+} from "@/lib/auth";
 import Card from "@/components/Card";
 import { Plus, Edit2, Key, Shield, User as UserIcon } from "lucide-react";
 
@@ -23,7 +29,7 @@ const PERMISSION_OPTIONS = [
 
 export default function PlatformStaffPage() {
   const [token, setToken] = useState<string | undefined>(undefined);
-  const [isSuperadmin, setIsSuperadmin] = useState(false);
+  const [session, setSession] = useState<AuthSession | null | undefined>(undefined);
   const [staff, setStaff] = useState<PlatformStaffRead[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -46,17 +52,11 @@ export default function PlatformStaffPage() {
   useEffect(() => {
     const t = window.localStorage.getItem("accessToken") || undefined;
     setToken(t);
-    const sessionRaw = window.localStorage.getItem("yummy_auth_session");
-    if (sessionRaw) {
-      try {
-        const session = JSON.parse(sessionRaw);
-        setIsSuperadmin(
-          session.primaryRole === "superadmin" || 
-          (session.userRoles && session.userRoles.includes("superadmin"))
-        );
-      } catch (e) {}
-    }
+    setSession(getStoredAuthSession());
   }, []);
+
+  const canViewStaff = canViewPlatformStaff(session);
+  const canManageStaff = canManagePlatformStaff(session);
 
   const loadStaff = async (authToken: string) => {
     try {
@@ -72,9 +72,9 @@ export default function PlatformStaffPage() {
   };
 
   useEffect(() => {
-    if (!token) return;
+    if (!token || !canViewStaff) return;
     loadStaff(token);
-  }, [token]);
+  }, [token, canViewStaff]);
 
   const resetForm = () => {
     setFormData({ name: "", email: "", password: "", permissions: [], is_active: true });
@@ -92,7 +92,7 @@ export default function PlatformStaffPage() {
 
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!token) return;
+    if (!token || !canManageStaff) return;
     setFormError(null);
     try {
       await createPlatformStaff({
@@ -111,7 +111,7 @@ export default function PlatformStaffPage() {
 
   const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!token || !showEditModal) return;
+    if (!token || !showEditModal || !canManageStaff) return;
     setFormError(null);
     try {
       await updatePlatformStaff(showEditModal.id, {
@@ -130,7 +130,7 @@ export default function PlatformStaffPage() {
 
   const handlePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!token || !showPasswordModal) return;
+    if (!token || !showPasswordModal || !canManageStaff) return;
     setFormError(null);
     try {
       await updatePlatformStaffPassword(showPasswordModal.id, {
@@ -143,11 +143,19 @@ export default function PlatformStaffPage() {
     }
   };
 
-  if (!isSuperadmin) {
+  if (session === undefined) {
+    return (
+      <div className="p-8">
+        <div className="text-sm text-slate-500">Loading staff access...</div>
+      </div>
+    );
+  }
+
+  if (!canViewStaff) {
     return (
       <div className="p-8">
         <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">
-          Super Admin privileges required to manage platform staff.
+          You do not have permission to view platform staff.
         </div>
       </div>
     );
@@ -164,15 +172,23 @@ export default function PlatformStaffPage() {
         </div>
         <button
           onClick={() => {
+            if (!canManageStaff) return;
             resetForm();
             setShowCreateModal(true);
           }}
-          className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 transition-colors"
+          disabled={!canManageStaff}
+          className="bg-orange-500 hover:bg-orange-600 disabled:bg-slate-200 disabled:text-slate-500 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 transition-colors"
         >
           <Plus className="w-4 h-4" />
           Add Staff Member
         </button>
       </div>
+
+      {!canManageStaff ? (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          You can view platform staff, but only users with <span className="font-semibold">Manage Staff</span> can create, edit, or reset passwords.
+        </div>
+      ) : null}
 
       {error ? (
         <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">
@@ -225,6 +241,7 @@ export default function PlatformStaffPage() {
               <div className="flex gap-2 pt-2">
                 <button
                   onClick={() => {
+                    if (!canManageStaff) return;
                     setFormData({
                       name: member.name,
                       email: member.email,
@@ -234,16 +251,19 @@ export default function PlatformStaffPage() {
                     });
                     setShowEditModal(member);
                   }}
-                  className="flex-1 flex justify-center items-center gap-1.5 py-1.5 border border-slate-200 hover:bg-slate-50 rounded-lg text-xs font-semibold text-slate-700 transition-colors"
+                  disabled={!canManageStaff}
+                  className="flex-1 flex justify-center items-center gap-1.5 py-1.5 border border-slate-200 hover:bg-slate-50 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed rounded-lg text-xs font-semibold text-slate-700 transition-colors"
                 >
                   <Edit2 className="w-3.5 h-3.5" /> Edit
                 </button>
                 <button
                   onClick={() => {
+                    if (!canManageStaff) return;
                     resetForm();
                     setShowPasswordModal(member);
                   }}
-                  className="flex-1 flex justify-center items-center gap-1.5 py-1.5 border border-slate-200 hover:bg-slate-50 rounded-lg text-xs font-semibold text-slate-700 transition-colors"
+                  disabled={!canManageStaff}
+                  className="flex-1 flex justify-center items-center gap-1.5 py-1.5 border border-slate-200 hover:bg-slate-50 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed rounded-lg text-xs font-semibold text-slate-700 transition-colors"
                 >
                   <Key className="w-3.5 h-3.5" /> Password
                 </button>

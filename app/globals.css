@@ -364,31 +364,27 @@ body {
 }
 
 /* Sidebar specific */
-.dark aside {
-  background-color: #1E293B !important;
-  border-color: #334155 !important;
+.admin-sidebar {
+  background: #ffffff;
 }
 
-.dark aside .border-b {
-  border-color: #334155 !important;
+.dark .admin-sidebar {
+  background-color: #020617 !important;
+  border-color: #1e293b !important;
 }
 
-/* Navigation items in dark mode */
-.dark nav a:not(.bg-orange-500) {
-  color: #94A3B8 !important;
+.dark .admin-sidebar__header,
+.dark .admin-sidebar__support {
+  border-color: #1e293b !important;
 }
 
-.dark nav a:not(.bg-orange-500):hover {
-  background-color: #334155 !important;
-  color: #E2E8F0 !important;
+.dark .admin-sidebar__link:not(.bg-orange-500) {
+  color: #94a3b8 !important;
 }
 
-.dark nav a:not(.bg-orange-500) .material-icons-round {
-  color: #94A3B8 !important;
-}
-
-.dark nav a:not(.bg-orange-500):hover .material-icons-round {
-  color: #E2E8F0 !important;
+.dark .admin-sidebar__link:not(.bg-orange-500):hover {
+  background-color: #0f172a !important;
+  color: #f8fafc !important;
 }
 
 /* SVG icons in dark mode */

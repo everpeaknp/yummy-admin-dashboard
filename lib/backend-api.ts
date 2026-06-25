@@ -89,6 +89,8 @@ export type BackendRestaurant = {
   fonepay_username?: string | null;
   hotel_enabled: boolean;
   restaurant_enabled: boolean;
+  finance_reports_enabled: boolean;
+  finance_accounting_enabled: boolean;
   billing_mode: string;
   effective_plan: string;
   plan_state: string;
@@ -219,6 +221,8 @@ export type PlatformDashboardResponse = {
     plan_state: string;
     hotel_enabled: boolean;
     restaurant_enabled: boolean;
+    finance_reports_enabled: boolean;
+    finance_accounting_enabled: boolean;
     created_at?: string | null;
   }>;
   insights: string[];
@@ -346,6 +350,8 @@ export type RestaurantUpdatePayload = Partial<Pick<
   | "timezone"
   | "hotel_enabled"
   | "restaurant_enabled"
+  | "finance_reports_enabled"
+  | "finance_accounting_enabled"
   | "kot_station_config"
   | "local_pos_ip"
   | "trial_ends_at"

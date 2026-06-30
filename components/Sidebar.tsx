@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { 
   LayoutDashboard, 
   CreditCard,
@@ -34,11 +34,7 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarPr
   const pathname = usePathname();
   const router = useRouter();
   
-  const [session, setSession] = useState<AuthSession | null>(null);
-  
-  useEffect(() => {
-    setSession(getStoredAuthSession());
-  }, []);
+  const [session] = useState<AuthSession | null>(() => getStoredAuthSession());
 
   const handleLogout = async () => {
     await logoutSession();

@@ -94,6 +94,12 @@ export type BackendRestaurant = {
   plan_state: string;
   trial_ends_at?: string | null;
   paid_ends_at?: string | null;
+  attendance_enabled?: boolean;
+  attendance_mobile_enabled?: boolean;
+  attendance_biometric_enabled?: boolean;
+  attendance_device_limit?: number;
+  attendance_trial_ends_at?: string | null;
+  attendance_ends_at?: string | null;
   entitlements?: Record<string, unknown> | null;
 };
 
@@ -364,6 +370,30 @@ export async function updateRestaurant(
     method: "PUT",
     body: payload,
   });
+}
+
+export type AttendanceEntitlementUpdatePayload = {
+  attendance_enabled?: boolean;
+  attendance_mobile_enabled?: boolean;
+  attendance_biometric_enabled?: boolean;
+  attendance_device_limit?: number;
+  attendance_trial_ends_at?: string | null;
+  attendance_ends_at?: string | null;
+};
+
+export async function updateRestaurantAttendanceEntitlement(
+  restaurantId: number,
+  payload: AttendanceEntitlementUpdatePayload,
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<BackendRestaurant>> {
+  return backendRequest<BaseResponse<BackendRestaurant>>(
+    `/admin/platform/restaurants/${restaurantId}/attendance-entitlement`,
+    {
+      ...options,
+      method: "PATCH",
+      body: payload,
+    },
+  );
 }
 
 export async function getPlatformDashboard(

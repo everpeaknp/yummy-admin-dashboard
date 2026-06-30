@@ -5,7 +5,13 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import Card from "@/components/Card";
 import RestaurantAvatar from "@/components/RestaurantAvatar";
-import { getRestaurant, updateRestaurant, type BackendRestaurant, type RestaurantUpdatePayload } from "@/lib/backend-api";
+import {
+  getRestaurant,
+  updateRestaurant,
+  updateRestaurantAttendanceEntitlement,
+  type BackendRestaurant,
+  type RestaurantUpdatePayload,
+} from "@/lib/backend-api";
 import { canManageRestaurants, getStoredAuthSession } from "@/lib/auth";
 
 type RestaurantFormState = {
@@ -25,6 +31,15 @@ type RestaurantFormState = {
   paid_ends_at: string;
 };
 
+type AttendanceFormState = {
+  attendance_enabled: boolean;
+  attendance_mobile_enabled: boolean;
+  attendance_biometric_enabled: boolean;
+  attendance_device_limit: string;
+  attendance_trial_ends_at: string;
+  attendance_ends_at: string;
+};
+
 const emptyForm: RestaurantFormState = {
   name: "",
   address: "",
@@ -40,6 +55,15 @@ const emptyForm: RestaurantFormState = {
   tax_enabled: true,
   trial_ends_at: "",
   paid_ends_at: "",
+};
+
+const emptyAttendanceForm: AttendanceFormState = {
+  attendance_enabled: false,
+  attendance_mobile_enabled: false,
+  attendance_biometric_enabled: false,
+  attendance_device_limit: "0",
+  attendance_trial_ends_at: "",
+  attendance_ends_at: "",
 };
 
 function formatDateTimeInput(value?: string | null) {
@@ -84,13 +108,26 @@ function toFormState(restaurant: BackendRestaurant): RestaurantFormState {
   };
 }
 
+function toAttendanceFormState(restaurant: BackendRestaurant): AttendanceFormState {
+  return {
+    attendance_enabled: Boolean(restaurant.attendance_enabled),
+    attendance_mobile_enabled: Boolean(restaurant.attendance_mobile_enabled),
+    attendance_biometric_enabled: Boolean(restaurant.attendance_biometric_enabled),
+    attendance_device_limit: String(restaurant.attendance_device_limit ?? 0),
+    attendance_trial_ends_at: formatDateTimeInput(restaurant.attendance_trial_ends_at),
+    attendance_ends_at: formatDateTimeInput(restaurant.attendance_ends_at),
+  };
+}
+
 export default function RestaurantDetailPage() {
   const params = useParams();
   const restaurantId = Number(params.id);
   const [restaurant, setRestaurant] = useState<BackendRestaurant | null>(null);
   const [form, setForm] = useState<RestaurantFormState>(emptyForm);
+  const [attendanceForm, setAttendanceForm] = useState<AttendanceFormState>(emptyAttendanceForm);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isSavingAttendance, setIsSavingAttendance] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -112,6 +149,7 @@ export default function RestaurantDetailPage() {
         }
         setRestaurant(response.data);
         setForm(toFormState(response.data));
+        setAttendanceForm(toAttendanceFormState(response.data));
         setError(null);
       } catch (loadError) {
         if (!active) {
@@ -181,11 +219,53 @@ export default function RestaurantDetailPage() {
       const response = await updateRestaurant(restaurant.id, payload, { token });
       setRestaurant(response.data);
       setForm(toFormState(response.data));
+      setAttendanceForm(toAttendanceFormState(response.data));
       setSuccess("Restaurant details saved successfully.");
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "Failed to save restaurant details");
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const saveAttendanceEntitlement = async () => {
+    if (!restaurant) return;
+    if (!canManageRestaurants(getStoredAuthSession())) {
+      setError("You do not have permission to manage attendance entitlement.");
+      return;
+    }
+
+    const deviceLimit = Number.parseInt(attendanceForm.attendance_device_limit || "0", 10);
+    if (!Number.isFinite(deviceLimit) || deviceLimit < 0) {
+      setError("Attendance device limit must be zero or greater.");
+      return;
+    }
+
+    setIsSavingAttendance(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const token = window.localStorage.getItem("accessToken") || undefined;
+      const response = await updateRestaurantAttendanceEntitlement(
+        restaurant.id,
+        {
+          attendance_enabled: attendanceForm.attendance_enabled,
+          attendance_mobile_enabled: attendanceForm.attendance_mobile_enabled,
+          attendance_biometric_enabled: attendanceForm.attendance_biometric_enabled,
+          attendance_device_limit: deviceLimit,
+          attendance_trial_ends_at: toIsoString(attendanceForm.attendance_trial_ends_at),
+          attendance_ends_at: toIsoString(attendanceForm.attendance_ends_at),
+        },
+        { token },
+      );
+      setRestaurant(response.data);
+      setAttendanceForm(toAttendanceFormState(response.data));
+      setSuccess("Attendance entitlement updated.");
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : "Failed to update attendance entitlement");
+    } finally {
+      setIsSavingAttendance(false);
     }
   };
 
@@ -210,6 +290,7 @@ export default function RestaurantDetailPage() {
         ...prev,
         billing_mode: (response.data.billing_mode as RestaurantFormState["billing_mode"]) || mode,
       }));
+      setAttendanceForm(toAttendanceFormState(response.data));
       setSuccess("Billing status updated.");
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "Failed to update billing status");
@@ -282,6 +363,7 @@ export default function RestaurantDetailPage() {
             })()}
             <span className={`rounded-full px-3 py-1 ${restaurant.restaurant_enabled ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>Restaurant</span>
             <span className={`rounded-full px-3 py-1 ${restaurant.hotel_enabled ? "bg-blue-100 text-blue-700" : "bg-slate-100 text-slate-500"}`}>Hotel</span>
+            <span className={`rounded-full px-3 py-1 ${restaurant.attendance_enabled ? "bg-purple-100 text-purple-700" : "bg-slate-100 text-slate-500"}`}>Attendance</span>
           </div>
         </div>
 
@@ -396,6 +478,76 @@ export default function RestaurantDetailPage() {
             </div>
           </div>
         </Card>
+
+        <Card className="p-6">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-bold text-slate-900">Attendance Add-on</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                Enable QR/mobile attendance and biometric hardware access for this restaurant.
+              </p>
+            </div>
+            <span className={`rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-wider ${attendanceForm.attendance_enabled ? "bg-purple-100 text-purple-700" : "bg-slate-100 text-slate-500"}`}>
+              {attendanceForm.attendance_enabled ? "Enabled" : "Disabled"}
+            </span>
+          </div>
+
+          <div className="mt-5 space-y-3">
+            <ToggleRow
+              label="Attendance add-on"
+              enabled={attendanceForm.attendance_enabled}
+              onToggle={() => setAttendanceForm((prev) => ({ ...prev, attendance_enabled: !prev.attendance_enabled }))}
+            />
+            <ToggleRow
+              label="Mobile QR clocking"
+              enabled={attendanceForm.attendance_mobile_enabled}
+              onToggle={() => setAttendanceForm((prev) => ({ ...prev, attendance_mobile_enabled: !prev.attendance_mobile_enabled }))}
+            />
+            <ToggleRow
+              label="Biometric devices"
+              enabled={attendanceForm.attendance_biometric_enabled}
+              onToggle={() => setAttendanceForm((prev) => ({ ...prev, attendance_biometric_enabled: !prev.attendance_biometric_enabled }))}
+            />
+          </div>
+
+          <div className="mt-5 grid grid-cols-1 gap-4">
+            <label className="block">
+              <span className="mb-2 block text-sm font-semibold text-slate-700">Biometric device limit</span>
+              <input
+                type="number"
+                min={0}
+                value={attendanceForm.attendance_device_limit}
+                onChange={(event) =>
+                  setAttendanceForm((prev) => ({ ...prev, attendance_device_limit: event.target.value }))
+                }
+                className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-orange-400"
+              />
+              <p className="mt-2 text-xs text-slate-500">Set 0 to block biometric device pairing.</p>
+            </label>
+            <DateTimeField
+              label="Attendance trial ends at"
+              value={attendanceForm.attendance_trial_ends_at}
+              onChange={(value) => setAttendanceForm((prev) => ({ ...prev, attendance_trial_ends_at: value }))}
+              helper="Optional trial expiry for attendance add-on only."
+            />
+            <DateTimeField
+              label="Attendance paid ends at"
+              value={attendanceForm.attendance_ends_at}
+              onChange={(value) => setAttendanceForm((prev) => ({ ...prev, attendance_ends_at: value }))}
+              helper="Optional paid entitlement expiry for attendance add-on only."
+            />
+          </div>
+
+          <button
+            type="button"
+            onClick={saveAttendanceEntitlement}
+            disabled={isSavingAttendance || !canManageRestaurants(getStoredAuthSession())}
+            className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-purple-600 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <span className="material-icons-round text-[18px]">fingerprint</span>
+            {isSavingAttendance ? "Saving attendance..." : "Save Attendance Add-on"}
+          </button>
+        </Card>
       </div>
 
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
@@ -408,6 +560,8 @@ export default function RestaurantDetailPage() {
             <InfoBlock label="Effective Plan" value={restaurant.effective_plan} />
             <InfoBlock label="Trial Ends" value={restaurant.trial_ends_at ? new Date(restaurant.trial_ends_at).toLocaleString() : "-"} />
             <InfoBlock label="Paid Ends" value={restaurant.paid_ends_at ? new Date(restaurant.paid_ends_at).toLocaleString() : "-"} />
+            <InfoBlock label="Attendance Trial Ends" value={restaurant.attendance_trial_ends_at ? new Date(restaurant.attendance_trial_ends_at).toLocaleString() : "-"} />
+            <InfoBlock label="Attendance Ends" value={restaurant.attendance_ends_at ? new Date(restaurant.attendance_ends_at).toLocaleString() : "-"} />
           </div>
         </Card>
 
@@ -418,6 +572,7 @@ export default function RestaurantDetailPage() {
             <p>{form.hotel_enabled ? "Hotel module is active." : "Hotel module is disabled."}</p>
             <p>{form.kot_enabled ? "KOT is active." : "KOT is disabled."}</p>
             <p>{form.tax_enabled ? "Tax is active." : "Tax is disabled."}</p>
+            <p>{attendanceForm.attendance_enabled ? "Attendance add-on is active." : "Attendance add-on is disabled."}</p>
           </div>
         </Card>
       </div>

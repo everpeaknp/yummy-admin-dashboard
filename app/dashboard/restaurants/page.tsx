@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { MapPin, Pencil, Phone, Search, Utensils } from "lucide-react";
+import { Fingerprint, MapPin, Pencil, Phone, Search, Utensils } from "lucide-react";
 import { getRestaurants, type BackendRestaurant } from "@/lib/backend-api";
 import { canManageRestaurants, getStoredAuthSession } from "@/lib/auth";
 import RestaurantAvatar from "@/components/RestaurantAvatar";
@@ -145,6 +145,12 @@ export default function RestaurantsPage() {
         case "hotel_enabled":
           isMatchingStatus = Boolean(restaurant.hotel_enabled);
           break;
+        case "attendance_enabled":
+          isMatchingStatus = Boolean(restaurant.attendance_enabled);
+          break;
+        case "attendance_disabled":
+          isMatchingStatus = !restaurant.attendance_enabled;
+          break;
         case "trial": {
           const expDate = getExpiryDateObj(restaurant);
           const isExpired = expDate ? (expDate.getTime() - new Date().getTime()) / (1000 * 3600 * 24) < 0 : false;
@@ -241,6 +247,7 @@ export default function RestaurantsPage() {
     const total = restaurantsList.length;
     const active = restaurantsList.filter((restaurant) => restaurant.restaurant_enabled).length;
     const hotelEnabled = restaurantsList.filter((restaurant) => restaurant.hotel_enabled).length;
+    const attendanceEnabled = restaurantsList.filter((restaurant) => restaurant.attendance_enabled).length;
     const trial = restaurantsList.filter((restaurant) => (restaurant.plan_state || "").toLowerCase().includes("trial")).length;
 
     const now = new Date();
@@ -255,7 +262,7 @@ export default function RestaurantsPage() {
       }
     });
 
-    return { total, active, hotelEnabled, trial, expiringSoon };
+    return { total, active, hotelEnabled, attendanceEnabled, trial, expiringSoon };
   }, [restaurantsList]);
 
   return (
@@ -273,7 +280,7 @@ export default function RestaurantsPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-6 gap-4">
           <div className="bg-white dark:bg-gray-800 rounded-lg p-5 shadow-sm border border-gray-100 dark:border-gray-700">
             <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Total Restaurants</p>
             <p className="text-2xl font-bold text-gray-900 dark:text-white mt-2">{summary.total}</p>
@@ -285,6 +292,10 @@ export default function RestaurantsPage() {
           <div className="bg-white dark:bg-gray-800 rounded-lg p-5 shadow-sm border border-gray-100 dark:border-gray-700">
             <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Hotel Enabled</p>
             <p className="text-2xl font-bold text-gray-900 dark:text-white mt-2">{summary.hotelEnabled}</p>
+          </div>
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-5 shadow-sm border border-gray-100 dark:border-gray-700">
+            <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Attendance</p>
+            <p className="text-2xl font-bold text-gray-900 dark:text-white mt-2">{summary.attendanceEnabled}</p>
           </div>
           <div className="bg-white dark:bg-gray-800 rounded-lg p-5 shadow-sm border border-gray-100 dark:border-gray-700">
             <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Trial / Limited</p>
@@ -313,6 +324,8 @@ export default function RestaurantsPage() {
                   <optgroup label="Services">
                     <option value="restaurant_enabled">Restaurant Enabled</option>
                     <option value="hotel_enabled">Hotel Enabled</option>
+                    <option value="attendance_enabled">Attendance Enabled</option>
+                    <option value="attendance_disabled">Attendance Disabled</option>
                   </optgroup>
                   <optgroup label="Billing Status">
                     <option value="free">Free</option>
@@ -447,6 +460,10 @@ export default function RestaurantsPage() {
                           </span>
                           <span className={`px-2 py-1 text-xs font-semibold rounded ${restaurant.kot_enabled ? "bg-orange-100 text-orange-700" : "bg-gray-100 text-gray-700"}`}>
                             KOT
+                          </span>
+                          <span className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded ${restaurant.attendance_enabled ? "bg-purple-100 text-purple-700" : "bg-gray-100 text-gray-700"}`}>
+                            <Fingerprint size={12} />
+                            Attendance
                           </span>
                         </div>
                       </td>

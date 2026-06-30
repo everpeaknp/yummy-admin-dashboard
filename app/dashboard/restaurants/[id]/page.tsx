@@ -25,6 +25,8 @@ type RestaurantFormState = {
   billing_mode: "paid" | "free" | "trial_paid";
   restaurant_enabled: boolean;
   hotel_enabled: boolean;
+  finance_reports_enabled: boolean;
+  finance_accounting_enabled: boolean;
   kot_enabled: boolean;
   tax_enabled: boolean;
   trial_ends_at: string;
@@ -51,6 +53,8 @@ const emptyForm: RestaurantFormState = {
   billing_mode: "paid",
   restaurant_enabled: true,
   hotel_enabled: false,
+  finance_reports_enabled: true,
+  finance_accounting_enabled: true,
   kot_enabled: true,
   tax_enabled: true,
   trial_ends_at: "",
@@ -101,6 +105,8 @@ function toFormState(restaurant: BackendRestaurant): RestaurantFormState {
     billing_mode: (restaurant.billing_mode as RestaurantFormState["billing_mode"]) || "paid",
     restaurant_enabled: Boolean(restaurant.restaurant_enabled),
     hotel_enabled: Boolean(restaurant.hotel_enabled),
+    finance_reports_enabled: restaurant.finance_reports_enabled !== false,
+    finance_accounting_enabled: restaurant.finance_accounting_enabled !== false,
     kot_enabled: Boolean(restaurant.kot_enabled),
     tax_enabled: Boolean(restaurant.tax_enabled),
     trial_ends_at: formatDateTimeInput(restaurant.trial_ends_at),
@@ -175,10 +181,19 @@ export default function RestaurantDetailPage() {
     () => [
       { label: "Restaurant", enabled: form.restaurant_enabled, color: "green" },
       { label: "Hotel", enabled: form.hotel_enabled, color: "blue" },
+      { label: "Finance Reports", enabled: form.finance_reports_enabled, color: "violet" },
+      { label: "Finance Accounting", enabled: form.finance_accounting_enabled, color: "amber" },
       { label: "KOT", enabled: form.kot_enabled, color: "orange" },
       { label: "Tax", enabled: form.tax_enabled, color: "teal" },
     ],
-    [form.hotel_enabled, form.kot_enabled, form.restaurant_enabled, form.tax_enabled],
+    [
+      form.finance_accounting_enabled,
+      form.finance_reports_enabled,
+      form.hotel_enabled,
+      form.kot_enabled,
+      form.restaurant_enabled,
+      form.tax_enabled,
+    ],
   );
 
   const saveChanges = async () => {
@@ -201,6 +216,8 @@ export default function RestaurantDetailPage() {
       billing_mode: form.billing_mode,
       restaurant_enabled: form.restaurant_enabled,
       hotel_enabled: form.hotel_enabled,
+      finance_reports_enabled: form.finance_reports_enabled,
+      finance_accounting_enabled: form.finance_accounting_enabled,
       kot_enabled: form.kot_enabled,
       tax_enabled: form.tax_enabled,
     };
@@ -473,6 +490,8 @@ export default function RestaurantDetailPage() {
             <div className="mt-3 flex flex-wrap gap-2 text-[11px] font-semibold uppercase tracking-wider">
               <span className={`rounded-full px-3 py-1 ${form.restaurant_enabled ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>Restaurant</span>
               <span className={`rounded-full px-3 py-1 ${form.hotel_enabled ? "bg-blue-100 text-blue-700" : "bg-slate-100 text-slate-500"}`}>Hotel</span>
+              <span className={`rounded-full px-3 py-1 ${form.finance_reports_enabled ? "bg-violet-100 text-violet-700" : "bg-slate-100 text-slate-500"}`}>Finance Reports</span>
+              <span className={`rounded-full px-3 py-1 ${form.finance_accounting_enabled ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-500"}`}>Finance Accounting</span>
               <span className={`rounded-full px-3 py-1 ${form.kot_enabled ? "bg-orange-100 text-orange-700" : "bg-slate-100 text-slate-500"}`}>KOT</span>
               <span className={`rounded-full px-3 py-1 ${form.tax_enabled ? "bg-teal-100 text-teal-700" : "bg-slate-100 text-slate-500"}`}>Tax</span>
             </div>
@@ -570,6 +589,8 @@ export default function RestaurantDetailPage() {
           <div className="mt-4 space-y-3 text-sm text-slate-600">
             <p>{form.restaurant_enabled ? "Restaurant module is active." : "Restaurant module is disabled."}</p>
             <p>{form.hotel_enabled ? "Hotel module is active." : "Hotel module is disabled."}</p>
+            <p>{form.finance_reports_enabled ? "Finance reports are active." : "Finance reports are disabled."}</p>
+            <p>{form.finance_accounting_enabled ? "Finance accounting is active." : "Finance accounting is disabled."}</p>
             <p>{form.kot_enabled ? "KOT is active." : "KOT is disabled."}</p>
             <p>{form.tax_enabled ? "Tax is active." : "Tax is disabled."}</p>
             <p>{attendanceForm.attendance_enabled ? "Attendance add-on is active." : "Attendance add-on is disabled."}</p>
@@ -710,6 +731,8 @@ function BillingToggle({
 function toggleKeyForLabel(label: string): keyof RestaurantFormState {
   if (label === "Restaurant") return "restaurant_enabled";
   if (label === "Hotel") return "hotel_enabled";
+  if (label === "Finance Reports") return "finance_reports_enabled";
+  if (label === "Finance Accounting") return "finance_accounting_enabled";
   if (label === "KOT") return "kot_enabled";
   return "tax_enabled";
 }

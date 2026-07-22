@@ -93,7 +93,97 @@ export function canAccessAdminDashboard(
     "platform.staff.view",
     "platform.staff.manage",
     "platform.billing.manage",
+    "platform.billing.view",
+    "platform.billing.catalog.manage",
+    "platform.billing.publish",
+    "platform.billing.subscriptions.manage",
+    "platform.billing.overrides.manage",
+    "platform.billing.payments.manage",
+    "platform.billing.audit.view",
   ]);
+}
+
+const LEGACY_BILLING_PERMISSION = "platform.billing.manage";
+
+function hasPlatformBillingPermission(
+  session: AuthSession | null | undefined,
+  permission: string,
+): boolean {
+  if (!session) return false;
+  if (isSuperadminSession(session)) return true;
+  if (!isPlatformStaffSession(session)) return false;
+  return hasAnyPermission(session, [permission, LEGACY_BILLING_PERMISSION]);
+}
+
+export function canViewBilling(session: AuthSession | null | undefined): boolean {
+  if (!session) return false;
+  if (isSuperadminSession(session)) return true;
+  if (!isPlatformStaffSession(session)) return false;
+  return hasAnyPermission(session, [
+    "platform.billing.view",
+    "platform.billing.catalog.manage",
+    "platform.billing.publish",
+    "platform.billing.subscriptions.manage",
+    "platform.billing.overrides.manage",
+    "platform.billing.payments.manage",
+    "platform.billing.audit.view",
+    LEGACY_BILLING_PERMISSION,
+  ]);
+}
+
+export function canViewBillingCatalog(session: AuthSession | null | undefined): boolean {
+  return (
+    canViewBilling(session) &&
+    (hasPlatformBillingPermission(session, "platform.billing.view") ||
+      hasPlatformBillingPermission(session, "platform.billing.catalog.manage") ||
+      hasPlatformBillingPermission(session, "platform.billing.publish"))
+  );
+}
+
+export function canViewAllBillingOperations(session: AuthSession | null | undefined): boolean {
+  return hasPlatformBillingPermission(session, "platform.billing.view");
+}
+
+export function canManageBillingCatalog(session: AuthSession | null | undefined): boolean {
+  return hasPlatformBillingPermission(session, "platform.billing.catalog.manage");
+}
+
+export function canPublishBillingCatalog(session: AuthSession | null | undefined): boolean {
+  return hasPlatformBillingPermission(session, "platform.billing.publish");
+}
+
+export function canViewBillingSubscriptions(session: AuthSession | null | undefined): boolean {
+  return (
+    canViewBilling(session) &&
+    (hasPlatformBillingPermission(session, "platform.billing.view") ||
+      hasPlatformBillingPermission(session, "platform.billing.subscriptions.manage") ||
+      hasPlatformBillingPermission(session, "platform.billing.overrides.manage") ||
+      hasPlatformBillingPermission(session, "platform.billing.audit.view"))
+  );
+}
+
+export function canManageBillingSubscriptions(session: AuthSession | null | undefined): boolean {
+  return hasPlatformBillingPermission(session, "platform.billing.subscriptions.manage");
+}
+
+export function canManageBillingOverrides(session: AuthSession | null | undefined): boolean {
+  return hasPlatformBillingPermission(session, "platform.billing.overrides.manage");
+}
+
+export function canViewBillingPayments(session: AuthSession | null | undefined): boolean {
+  return (
+    canViewBilling(session) &&
+    (hasPlatformBillingPermission(session, "platform.billing.view") ||
+      hasPlatformBillingPermission(session, "platform.billing.payments.manage"))
+  );
+}
+
+export function canManageBillingPayments(session: AuthSession | null | undefined): boolean {
+  return hasPlatformBillingPermission(session, "platform.billing.payments.manage");
+}
+
+export function canViewBillingAudit(session: AuthSession | null | undefined): boolean {
+  return hasPlatformBillingPermission(session, "platform.billing.audit.view");
 }
 
 export function canManageRestaurants(session: AuthSession | null | undefined): boolean {

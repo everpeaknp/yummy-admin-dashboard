@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import Card from "@/components/Card";
 import RestaurantAvatar from "@/components/RestaurantAvatar";
+import RestaurantSubscriptionCard from "@/components/RestaurantSubscriptionCard";
 import {
   getRestaurant,
   updateRestaurant,
@@ -134,6 +135,7 @@ export default function RestaurantDetailPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isSavingAttendance, setIsSavingAttendance] = useState(false);
+  const [billingV2Available, setBillingV2Available] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -213,7 +215,6 @@ export default function RestaurantDetailPage() {
       pan_number: form.pan_number,
       timezone: form.timezone,
       local_pos_ip: form.local_pos_ip,
-      billing_mode: form.billing_mode,
       restaurant_enabled: form.restaurant_enabled,
       hotel_enabled: form.hotel_enabled,
       finance_reports_enabled: form.finance_reports_enabled,
@@ -222,13 +223,16 @@ export default function RestaurantDetailPage() {
       tax_enabled: form.tax_enabled,
     };
 
-    const trialEndsAt = toIsoString(form.trial_ends_at);
-    const paidEndsAt = toIsoString(form.paid_ends_at);
-    if (trialEndsAt) {
-      payload.trial_ends_at = trialEndsAt;
-    }
-    if (paidEndsAt) {
-      payload.paid_ends_at = paidEndsAt;
+    if (billingV2Available === false) {
+      payload.billing_mode = form.billing_mode;
+      const trialEndsAt = toIsoString(form.trial_ends_at);
+      const paidEndsAt = toIsoString(form.paid_ends_at);
+      if (trialEndsAt) {
+        payload.trial_ends_at = trialEndsAt;
+      }
+      if (paidEndsAt) {
+        payload.paid_ends_at = paidEndsAt;
+      }
     }
 
     try {
@@ -418,51 +422,18 @@ export default function RestaurantDetailPage() {
           </div>
         </Card>
 
-        <Card className="p-6">
-          <h2 className="text-lg font-bold text-slate-900">Billing Status</h2>
-          <p className="mt-1 text-sm text-slate-500">Switch the restaurant between paid and unpaid states.</p>
-
-          <div className="mt-5 grid grid-cols-1 gap-3">
-            <BillingToggle
-              label="Paid"
-              description="Full subscription active"
-              active={form.billing_mode === "paid"}
-              onClick={() => saveBillingMode("paid")}
-            />
-            <BillingToggle
-              label="Unpaid"
-              description="Disable paid access / mark free"
-              active={form.billing_mode === "free"}
-              onClick={() => saveBillingMode("free")}
-            />
-            <BillingToggle
-              label="Trial"
-              description="Trial paid access"
-              active={form.billing_mode === "trial_paid"}
-              onClick={() => saveBillingMode("trial_paid")}
-            />
-          </div>
-
-          <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
-            <h3 className="text-sm font-semibold text-slate-900">Current billing mode</h3>
-            <p className="mt-2 text-sm text-slate-600">{form.billing_mode}</p>
-          </div>
-
-          <div className="mt-6 grid grid-cols-1 gap-4">
-            <DateTimeField
-              label="Trial ends at"
-              value={form.trial_ends_at}
-              onChange={(value) => setForm((prev) => ({ ...prev, trial_ends_at: value }))}
-              helper="Sets when the free trial ends."
-            />
-            <DateTimeField
-              label="Paid ends at"
-              value={form.paid_ends_at}
-              onChange={(value) => setForm((prev) => ({ ...prev, paid_ends_at: value }))}
-              helper="Sets when the paid period ends."
-            />
-          </div>
-        </Card>
+        <RestaurantSubscriptionCard
+          restaurant={restaurant}
+          legacyMode={form.billing_mode}
+          legacyTrialEndsAt={form.trial_ends_at}
+          legacyPaidEndsAt={form.paid_ends_at}
+          legacySaving={isSaving}
+          canManageLegacy={canManageRestaurants(getStoredAuthSession())}
+          onLegacyModeChange={saveBillingMode}
+          onLegacyTrialEndsAtChange={(value) => setForm((prev) => ({ ...prev, trial_ends_at: value }))}
+          onLegacyPaidEndsAtChange={(value) => setForm((prev) => ({ ...prev, paid_ends_at: value }))}
+          onV2AvailabilityChange={setBillingV2Available}
+        />
 
         <Card className="p-6">
           <h2 className="text-lg font-bold text-slate-900">Service Flags</h2>
@@ -498,12 +469,12 @@ export default function RestaurantDetailPage() {
           </div>
         </Card>
 
-        <Card className="p-6">
+        {billingV2Available === false ? <Card className="p-6">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <h2 className="text-lg font-bold text-slate-900">Attendance Add-on</h2>
+              <h2 className="text-lg font-bold text-slate-900">Legacy Attendance Add-on</h2>
               <p className="mt-1 text-sm text-slate-500">
-                Enable QR/mobile attendance and biometric hardware access for this restaurant.
+                Compatibility controls shown only because Subscription V2 is unavailable.
               </p>
             </div>
             <span className={`rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-wider ${attendanceForm.attendance_enabled ? "bg-purple-100 text-purple-700" : "bg-slate-100 text-slate-500"}`}>
@@ -566,7 +537,7 @@ export default function RestaurantDetailPage() {
             <span className="material-icons-round text-[18px]">fingerprint</span>
             {isSavingAttendance ? "Saving attendance..." : "Save Attendance Add-on"}
           </button>
-        </Card>
+        </Card> : null}
       </div>
 
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
@@ -695,36 +666,6 @@ function InfoBlock({ label, value }: { label: string; value: string | number }) 
       <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">{label}</p>
       <p className="mt-2 text-sm font-semibold text-slate-900">{value}</p>
     </div>
-  );
-}
-
-function BillingToggle({
-  label,
-  description,
-  active,
-  onClick,
-}: {
-  label: string;
-  description: string;
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`w-full rounded-xl border px-4 py-3 text-left transition-colors ${active ? "border-orange-300 bg-orange-50" : "border-slate-200 bg-white hover:border-slate-300"}`}
-    >
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <p className="text-sm font-semibold text-slate-900">{label}</p>
-          <p className="text-xs text-slate-500">{description}</p>
-        </div>
-        <span className={`rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-wider ${active ? "bg-orange-500 text-white" : "bg-slate-100 text-slate-500"}`}>
-          {active ? "Selected" : "Set"}
-        </span>
-      </div>
-    </button>
   );
 }
 

@@ -21,6 +21,9 @@ import {
   getStoredAuthSession,
   type AuthSession,
   canViewPlatformStaff,
+  canViewBillingCatalog,
+  canViewBillingPayments,
+  canViewBillingSubscriptions,
   hasPermission,
   isSuperadminSession,
 } from "@/lib/auth";
@@ -47,9 +50,9 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarPr
     { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
     { href: "/dashboard/leads", label: "Leads", icon: Users, permission: "platform.leads.view" },
     { href: "/dashboard/restaurants", label: "Restaurants", icon: Building2, permission: "platform.restaurants.view" },
-    { href: "/dashboard/plans", label: "Plans & Billing", icon: CreditCard, permission: "platform.billing.manage" },
-    { href: "/dashboard/subscriptions", label: "Subscriptions", icon: Repeat, permission: "platform.billing.manage" },
-    { href: "/dashboard/payments", label: "Payments", icon: Wallet, permission: "platform.billing.manage" },
+    { href: "/dashboard/plans", label: "Plans & Billing", icon: CreditCard, canAccess: canViewBillingCatalog },
+    { href: "/dashboard/subscriptions", label: "Subscriptions", icon: Repeat, canAccess: canViewBillingSubscriptions },
+    { href: "/dashboard/payments", label: "Payments", icon: Wallet, canAccess: canViewBillingPayments },
     { href: "/dashboard/staff", label: "Platform Staff", icon: Shield, canAccess: canViewPlatformStaff },
     { href: "/dashboard/settings", label: "Access & Settings", icon: Users },
   ];
@@ -130,19 +133,8 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarPr
       {/* Support Section */}
       <div className="admin-sidebar__support border-t border-slate-200 dark:border-slate-700 px-3 py-4">
         <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-[0.22em] mb-3 px-3">
-          SUPPORT
+          ACCOUNT
         </p>
-        <Link
-          href="/dashboard/settings"
-          onClick={closeMobile}
-          className={`admin-sidebar__link flex items-center gap-3 px-3 py-3 rounded-xl text-[13px] font-semibold transition-all ${
-            pathname === "/dashboard/settings"
-              ? "bg-orange-500 text-white shadow-[0_10px_24px_-14px_rgba(249,115,22,0.95)]"
-              : "text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100"
-          }`}
-        >
-          <span>Settings</span>
-        </Link>
         <button
           type="button"
           onClick={async () => {

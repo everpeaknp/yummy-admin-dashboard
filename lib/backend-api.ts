@@ -103,6 +103,7 @@ export type BackendRestaurant = {
   attendance_trial_ends_at?: string | null;
   attendance_ends_at?: string | null;
   entitlements?: Record<string, unknown> | null;
+  billing_account_id?: number | null;
 };
 
 export type BackendUser = {
@@ -282,9 +283,20 @@ async function backendRequest<T>(
         const record = parsed as Record<string, unknown>;
         const parsedMessage = record.message;
         const parsedDetail = record.detail;
+        const detailRecord = parsedDetail && typeof parsedDetail === "object" && !Array.isArray(parsedDetail)
+          ? parsedDetail as Record<string, unknown>
+          : null;
+        const detailValidation = detailRecord?.validation_errors;
+        const detailMessage =
+          (typeof parsedDetail === "string" && parsedDetail) ||
+          (typeof detailRecord?.message === "string" && detailRecord.message) ||
+          (Array.isArray(detailValidation) && detailValidation.map(String).join(" ")) ||
+          (Array.isArray(parsedDetail) && parsedDetail
+            .map((item) => item && typeof item === "object" && "msg" in item ? String((item as { msg: unknown }).msg) : String(item))
+            .join(" "));
         message =
           (typeof parsedMessage === "string" && parsedMessage) ||
-          (typeof parsedDetail === "string" && parsedDetail) ||
+          detailMessage ||
           message;
       }
     } catch {
@@ -780,5 +792,953 @@ export async function updatePlatformStaffPassword(
       method: "PATCH",
       body: payload,
     },
+  );
+}
+
+// ==========================================
+// Platform Billing V2
+// ==========================================
+
+export type BillingPlanStatus = "active" | "retired" | string;
+export type BillingVersionStatus = "draft" | "published" | "retired" | string;
+export type BillingSubscriptionStatus =
+  | "scheduled"
+  | "pending_payment"
+  | "trialing"
+  | "active"
+  | "grace"
+  | "past_due"
+  | "expired"
+  | "canceled"
+  | string;
+
+export type BillingEntitlementValue = boolean | number | string | null;
+
+export type BillingEntitlementDefinition = {
+  key: string;
+  label: string;
+  description?: string | null;
+  module?: string | null;
+  value_type: "boolean" | "integer" | "string" | string;
+  usage_scope?: "billing_account" | "restaurant" | "subscription" | string | null;
+  is_client_visible?: boolean;
+  is_enforced?: boolean;
+};
+
+export type BillingPlanPrice = {
+  id?: number;
+  plan_version_id?: number;
+  billing_interval_months: number | null;
+  price_type: "flat" | "initial" | "renewal" | string;
+  amount: number | string | null;
+  currency: string;
+  tax_inclusive: boolean;
+  quote_only: boolean;
+  effective_from?: string | null;
+  effective_to?: string | null;
+  is_active?: boolean;
+};
+
+export type BillingPlanVersion = {
+  id: number;
+  plan_id?: number;
+  version_number: number;
+  status: BillingVersionStatus;
+  subtitle?: string | null;
+  marketing_content?: Record<string, unknown> | null;
+  effective_from?: string | null;
+  published_at?: string | null;
+  published_by?: number | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+  lock_version?: number;
+  prices?: BillingPlanPrice[];
+  entitlements?: Record<string, BillingEntitlementValue>;
+};
+
+export type BillingPlan = {
+  id: number;
+  code: string;
+  name: string;
+  description?: string | null;
+  display_order: number;
+  is_public: boolean;
+  status: BillingPlanStatus;
+  created_at?: string | null;
+  updated_at?: string | null;
+  versions?: BillingPlanVersion[];
+  draft_version?: BillingPlanVersion | null;
+  published_version?: BillingPlanVersion | null;
+  latest_version?: BillingPlanVersion | null;
+  current_version?: BillingPlanVersion | null;
+};
+
+export type BillingTrialSettings = {
+  id?: number;
+  trial_enabled: boolean;
+  trial_plan_id: number;
+  trial_plan_code?: string | null;
+  trial_plan_name?: string | null;
+  trial_plan_version_id?: number | null;
+  trial_days: number;
+  configuration_valid: boolean;
+  validation_message?: string | null;
+  updated_by?: number | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
+export type BillingTrialSettingsUpdatePayload = {
+  trial_enabled: boolean;
+  trial_plan_id: number;
+  trial_days: number;
+  reason: string;
+};
+
+export type BillingPlanCreatePayload = {
+  code: string;
+  name: string;
+  description?: string | null;
+  display_order?: number;
+  is_public?: boolean;
+};
+
+export type BillingPlanUpdatePayload = Partial<
+  Pick<BillingPlan, "name" | "description" | "display_order" | "is_public" | "status">
+>;
+
+export type BillingPlanVersionUpdatePayload = {
+  subtitle?: string | null;
+  marketing_content?: Record<string, unknown> | null;
+  effective_from?: string | null;
+  lock_version?: number;
+};
+
+export type BillingPlanValidation = {
+  valid: boolean;
+  errors: string[];
+  warnings: string[];
+};
+
+export type BillingPlanPublishResult = {
+  version: BillingPlanVersion;
+  validation?: BillingPlanValidation;
+  valid?: boolean;
+  validation_errors?: string[];
+};
+
+export type BillingAddonVersion = {
+  id: number;
+  addon_id?: number;
+  addon_code?: string;
+  version_number: number;
+  status: BillingVersionStatus;
+  effective_from?: string | null;
+  published_at?: string | null;
+  prices?: BillingPlanPrice[];
+  entitlements?: Record<string, BillingEntitlementValue>;
+};
+
+export type BillingAddonCreatePayload = {
+  code: string;
+  name: string;
+  description?: string | null;
+  is_public?: boolean;
+  compatible_plan_codes?: string[];
+};
+
+export type BillingAddonUpdatePayload = Partial<
+  Pick<BillingAddon, "name" | "description" | "status" | "is_public" | "compatible_plan_codes">
+>;
+
+export type BillingAddon = {
+  id: number;
+  code: string;
+  name: string;
+  description?: string | null;
+  status: BillingPlanStatus;
+  is_public?: boolean;
+  compatible_plan_codes?: string[];
+  versions?: BillingAddonVersion[];
+  published_version?: BillingAddonVersion | null;
+  current_version?: BillingAddonVersion | null;
+};
+
+export type BillingUsageItem = {
+  used: number;
+  limit: number | null;
+  remaining?: number | null;
+};
+
+export type BillingSubscriptionAddonAssignment = {
+  id?: number;
+  addon_id?: number;
+  addon_version_id: number;
+  selected_price_id?: number | null;
+  addon_code?: string | null;
+  addon_name?: string | null;
+  code?: string | null;
+  name?: string | null;
+  status?: string;
+  started_at?: string | null;
+  ends_at?: string | null;
+  configuration?: Record<string, unknown> | null;
+  prices?: BillingPlanPrice[];
+};
+
+export type BillingSubscriptionOverride = {
+  id: number;
+  entitlement_key: string;
+  override_value?: BillingEntitlementValue;
+  value?: BillingEntitlementValue;
+  reason: string;
+  starts_at?: string | null;
+  ends_at?: string | null;
+  created_at?: string | null;
+};
+
+export type BillingSubscription = {
+  id: number;
+  billing_account_id: number;
+  billing_account_name?: string | null;
+  owner_name?: string | null;
+  owner_email?: string | null;
+  owner_user_id?: number | null;
+  owner?: { id: number; name: string; email: string } | null;
+  restaurant_id?: number | null;
+  restaurant_ids?: number[];
+  restaurant_name?: string | null;
+  restaurant_names?: string[];
+  restaurants?: Array<{ id: number; name: string; is_primary?: boolean }>;
+  plan_version_id: number;
+  selected_price_id?: number | null;
+  plan_code?: string | null;
+  plan_name?: string | null;
+  plan_version_number?: number | null;
+  plan_version?: number | BillingPlanVersion | null;
+  status: BillingSubscriptionStatus;
+  effective_status?: BillingSubscriptionStatus;
+  billing_source?: string | null;
+  started_at?: string | null;
+  trial_ends_at?: string | null;
+  current_period_start?: string | null;
+  current_period_end?: string | null;
+  grace_ends_at?: string | null;
+  cancel_at_period_end?: boolean;
+  canceled_at?: string | null;
+  notes?: string | null;
+  plan_version_prices?: BillingPlanPrice[];
+  addons?: BillingSubscriptionAddonAssignment[];
+  overrides?: BillingSubscriptionOverride[];
+  usage?: Record<string, BillingUsageItem>;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
+export type BillingSubscriptionList = {
+  items: BillingSubscription[];
+  total: number;
+};
+
+export type BillingSubscriptionAssignPayload = {
+  plan_version_id: number;
+  selected_price_id: number;
+  status: BillingSubscriptionStatus;
+  billing_source?: "manual" | "gateway" | "contract";
+  started_at?: string | null;
+  trial_ends_at?: string | null;
+  current_period_start?: string | null;
+  current_period_end?: string | null;
+  grace_ends_at?: string | null;
+  notes?: string | null;
+  reason: string;
+};
+
+export type BillingSubscriptionUpdatePayload = Partial<
+  Pick<
+    BillingSubscription,
+    | "status"
+    | "selected_price_id"
+    | "current_period_start"
+    | "current_period_end"
+    | "grace_ends_at"
+    | "cancel_at_period_end"
+    | "notes"
+  >
+> & {
+  reason: string;
+};
+
+export type BillingOverrideCreatePayload = {
+  entitlement_key: string;
+  override_value: BillingEntitlementValue;
+  reason: string;
+  starts_at?: string | null;
+  ends_at?: string | null;
+};
+
+export type BillingAddonAssignmentsPayload = {
+  addon_version_ids: number[];
+  addons?: Array<{
+    addon_version_id: number;
+    selected_price_id?: number | null;
+  }>;
+  reason: string;
+};
+
+export type PublicBillingCatalog = {
+  catalog_version: string;
+  currency: string;
+  plans: BillingPlan[];
+  addons: BillingAddon[];
+  trial_offer?: BillingTrialSettings | null;
+};
+
+export type BillingInvoice = {
+  id: number;
+  subscription_id: number;
+  billing_account_id?: number;
+  billing_account_name?: string | null;
+  invoice_number?: string | null;
+  status: string;
+  currency: string;
+  subtotal?: number | string;
+  tax_amount?: number | string;
+  discount_amount?: number | string;
+  total_amount: number | string;
+  amount_due?: number | string;
+  amount_paid?: number | string;
+  due_at?: string | null;
+  period_start?: string | null;
+  period_end?: string | null;
+  issued_at?: string | null;
+  paid_at?: string | null;
+  created_at?: string | null;
+  stored_status?: string;
+  line_items?: Array<Record<string, unknown>>;
+  source?: "manual" | "contract" | "upgrade" | "renewal" | string;
+  voided_at?: string | null;
+  void_reason?: string | null;
+  payments?: BillingPayment[];
+};
+
+export type BillingPayment = {
+  id: number;
+  invoice_id?: number;
+  amount: number | string;
+  currency: string;
+  payment_method?: string | null;
+  reference?: string | null;
+  paid_at: string;
+  recorded_by?: number | null;
+  created_at?: string | null;
+  status?: string;
+  reversed_at?: string | null;
+  reversal_reason?: string | null;
+  reversed_by?: number | null;
+};
+
+export type BillingAccount = {
+  id: number;
+  name: string;
+  owner_user_id?: number | null;
+  currency: string;
+  status: string;
+  restaurants: Array<{
+    restaurant_id: number;
+    restaurant_name?: string | null;
+    is_primary: boolean;
+  }>;
+  current_subscription?: BillingSubscription | null;
+};
+
+export type BillingAccountUpdatePayload = {
+  name?: string;
+  owner_user_id?: number | null;
+  reason: string;
+};
+
+export type BillingAccountRestaurantsReplacePayload = {
+  restaurant_ids: number[];
+  primary_restaurant_id: number;
+  allow_move?: boolean;
+  reason: string;
+};
+
+export type BillingUpgradeRequest = {
+  id: number;
+  billing_account_id: number;
+  restaurant_id: number;
+  requested_by?: number | null;
+  requested_plan_code: string;
+  billing_interval_months?: number | null;
+  requested_addon_codes: string[];
+  message?: string | null;
+  status: string;
+  reviewed_by?: number | null;
+  reviewed_at?: string | null;
+  fulfilled_subscription_id?: number | null;
+  invoice_id?: number | null;
+  completed_at?: string | null;
+  created_at: string;
+};
+
+export type BillingAuditLog = {
+  id: number;
+  billing_account_id?: number | null;
+  subscription_id?: number | null;
+  entity_type: string;
+  entity_id?: number | null;
+  action: string;
+  reason?: string | null;
+  actor_id?: number | null;
+  before?: Record<string, unknown> | null;
+  after?: Record<string, unknown> | null;
+  created_at: string;
+};
+
+export type BillingPaymentCreatePayload = {
+  amount: number;
+  currency: string;
+  payment_method: string;
+  reference?: string | null;
+  paid_at?: string | null;
+  reason: string;
+};
+
+export type BillingInvoiceCreatePayload = {
+  invoice_number: string;
+  currency: string;
+  subtotal: number;
+  tax_amount: number;
+  discount_amount?: number;
+  total_amount: number;
+  due_at?: string | null;
+  period_start?: string | null;
+  period_end?: string | null;
+  notes?: string | null;
+  line_items?: Array<Record<string, unknown>>;
+  source?: "manual" | "contract" | "upgrade" | "renewal";
+  reason: string;
+};
+
+export type BillingContractInvoiceCreatePayload = {
+  invoice_number?: string | null;
+  tax_rate_percent?: number;
+  discount_amount?: number;
+  negotiated_base_amount?: number | null;
+  negotiated_addon_amounts?: Record<string, number>;
+  due_at?: string | null;
+  period_start?: string | null;
+  period_end?: string | null;
+  notes?: string | null;
+  source?: "contract" | "upgrade" | "renewal";
+  reason: string;
+};
+
+export type BillingUpgradeFulfillPayload = {
+  selected_plan_price_id: number;
+  selected_addon_price_ids: Record<string, number>;
+  billing_source: "manual" | "contract";
+  started_at?: string | null;
+  trial_ends_at?: string | null;
+  current_period_start?: string | null;
+  current_period_end?: string | null;
+  grace_ends_at?: string | null;
+  invoice_number?: string | null;
+  tax_rate_percent?: number;
+  discount_amount?: number;
+  negotiated_base_amount?: number | null;
+  negotiated_addon_amounts?: Record<string, number>;
+  due_at?: string | null;
+  payment_method?: string | null;
+  payment_reference?: string | null;
+  paid_at?: string | null;
+  notes?: string | null;
+  reason: string;
+};
+
+export type BillingMetrics = {
+  currency: "NPR" | string;
+  active_subscriptions: number;
+  trialing: number;
+  grace_or_past_due: number;
+  scheduled: number;
+  pending_payment: number;
+  estimated_mrr: number | string;
+  estimated_arr: number | string;
+  outstanding: number | string;
+  overdue: number | string;
+  payments_last_30_days: number | string;
+  canceled_last_30_days: number;
+  renewals_next_30_days: number;
+  generated_at: string;
+};
+
+export function isBackendRouteUnavailable(error: unknown): boolean {
+  return error instanceof Error && /^\[(404|405|501)\]/.test(error.message);
+}
+
+const PLATFORM_BILLING_PATH = "/admin/platform/billing";
+
+export async function getPublicBillingCatalog(
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<PublicBillingCatalog>> {
+  return backendFetch<BaseResponse<PublicBillingCatalog>>("/subscriptions/catalog", options);
+}
+
+export async function getBillingPlans(
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<BillingPlan[]>> {
+  return backendFetch<BaseResponse<BillingPlan[]>>(`${PLATFORM_BILLING_PATH}/plans`, options);
+}
+
+export async function getBillingTrialSettings(
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<BillingTrialSettings>> {
+  return backendFetch<BaseResponse<BillingTrialSettings>>(
+    `${PLATFORM_BILLING_PATH}/settings`,
+    options,
+  );
+}
+
+export async function updateBillingTrialSettings(
+  payload: BillingTrialSettingsUpdatePayload,
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<BillingTrialSettings>> {
+  return backendRequest<BaseResponse<BillingTrialSettings>>(
+    `${PLATFORM_BILLING_PATH}/settings`,
+    { ...options, method: "PATCH", body: payload },
+  );
+}
+
+export async function getBillingPlan(
+  planId: number,
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<BillingPlan>> {
+  return backendFetch<BaseResponse<BillingPlan>>(`${PLATFORM_BILLING_PATH}/plans/${planId}`, options);
+}
+
+export async function createBillingPlan(
+  payload: BillingPlanCreatePayload,
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<BillingPlan>> {
+  return backendRequest<BaseResponse<BillingPlan>>(`${PLATFORM_BILLING_PATH}/plans`, {
+    ...options,
+    method: "POST",
+    body: payload,
+  });
+}
+
+export async function updateBillingPlan(
+  planId: number,
+  payload: BillingPlanUpdatePayload,
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<BillingPlan>> {
+  return backendRequest<BaseResponse<BillingPlan>>(`${PLATFORM_BILLING_PATH}/plans/${planId}`, {
+    ...options,
+    method: "PATCH",
+    body: payload,
+  });
+}
+
+export async function createBillingPlanVersion(
+  planId: number,
+  payload: { source_version_id?: number | null } = {},
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<BillingPlanVersion>> {
+  return backendRequest<BaseResponse<BillingPlanVersion>>(
+    `${PLATFORM_BILLING_PATH}/plans/${planId}/versions`,
+    { ...options, method: "POST", body: payload },
+  );
+}
+
+export async function getBillingPlanVersion(
+  versionId: number,
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<BillingPlanVersion>> {
+  return backendFetch<BaseResponse<BillingPlanVersion>>(
+    `${PLATFORM_BILLING_PATH}/plan-versions/${versionId}`,
+    options,
+  );
+}
+
+export async function updateBillingPlanVersion(
+  versionId: number,
+  payload: BillingPlanVersionUpdatePayload,
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<BillingPlanVersion>> {
+  return backendRequest<BaseResponse<BillingPlanVersion>>(
+    `${PLATFORM_BILLING_PATH}/plan-versions/${versionId}`,
+    { ...options, method: "PATCH", body: payload },
+  );
+}
+
+export async function updateBillingPlanVersionPrices(
+  versionId: number,
+  prices: BillingPlanPrice[],
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<BillingPlanVersion>> {
+  return backendRequest<BaseResponse<BillingPlanVersion>>(
+    `${PLATFORM_BILLING_PATH}/plan-versions/${versionId}/prices`,
+    { ...options, method: "PUT", body: { prices } },
+  );
+}
+
+export async function updateBillingPlanVersionEntitlements(
+  versionId: number,
+  entitlements: Record<string, BillingEntitlementValue>,
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<BillingPlanVersion>> {
+  return backendRequest<BaseResponse<BillingPlanVersion>>(
+    `${PLATFORM_BILLING_PATH}/plan-versions/${versionId}/entitlements`,
+    { ...options, method: "PUT", body: { entitlements } },
+  );
+}
+
+export async function publishBillingPlanVersion(
+  versionId: number,
+  reason: string,
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<BillingPlanPublishResult>> {
+  return backendRequest<BaseResponse<BillingPlanPublishResult>>(
+    `${PLATFORM_BILLING_PATH}/plan-versions/${versionId}/publish`,
+    { ...options, method: "POST", body: { reason } },
+  );
+}
+
+export async function getBillingEntitlementDefinitions(
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<BillingEntitlementDefinition[]>> {
+  return backendFetch<BaseResponse<BillingEntitlementDefinition[]>>(
+    `${PLATFORM_BILLING_PATH}/entitlement-definitions`,
+    options,
+  );
+}
+
+export async function getBillingAddons(
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<BillingAddon[]>> {
+  return backendFetch<BaseResponse<BillingAddon[]>>(`${PLATFORM_BILLING_PATH}/addons`, options);
+}
+
+export async function createBillingAddon(
+  payload: BillingAddonCreatePayload,
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<BillingAddon>> {
+  return backendRequest<BaseResponse<BillingAddon>>(`${PLATFORM_BILLING_PATH}/addons`, {
+    ...options,
+    method: "POST",
+    body: payload,
+  });
+}
+
+export async function updateBillingAddon(
+  addonId: number,
+  payload: BillingAddonUpdatePayload,
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<BillingAddon>> {
+  return backendRequest<BaseResponse<BillingAddon>>(`${PLATFORM_BILLING_PATH}/addons/${addonId}`, {
+    ...options,
+    method: "PATCH",
+    body: payload,
+  });
+}
+
+export async function createBillingAddonVersion(
+  addonId: number,
+  payload: { source_version_id?: number | null; effective_from?: string | null } = {},
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<BillingAddonVersion>> {
+  return backendRequest<BaseResponse<BillingAddonVersion>>(
+    `${PLATFORM_BILLING_PATH}/addons/${addonId}/versions`,
+    { ...options, method: "POST", body: payload },
+  );
+}
+
+export async function getBillingAddonVersion(
+  versionId: number,
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<BillingAddonVersion>> {
+  return backendFetch<BaseResponse<BillingAddonVersion>>(
+    `${PLATFORM_BILLING_PATH}/addon-versions/${versionId}`,
+    options,
+  );
+}
+
+export async function updateBillingAddonVersion(
+  versionId: number,
+  payload: { effective_from?: string | null },
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<BillingAddonVersion>> {
+  return backendRequest<BaseResponse<BillingAddonVersion>>(
+    `${PLATFORM_BILLING_PATH}/addon-versions/${versionId}`,
+    { ...options, method: "PATCH", body: payload },
+  );
+}
+
+export async function updateBillingAddonVersionPrices(
+  versionId: number,
+  prices: BillingPlanPrice[],
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<BillingAddonVersion>> {
+  return backendRequest<BaseResponse<BillingAddonVersion>>(
+    `${PLATFORM_BILLING_PATH}/addon-versions/${versionId}/prices`,
+    { ...options, method: "PUT", body: { prices } },
+  );
+}
+
+export async function updateBillingAddonVersionEntitlements(
+  versionId: number,
+  entitlements: Record<string, BillingEntitlementValue>,
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<BillingAddonVersion>> {
+  return backendRequest<BaseResponse<BillingAddonVersion>>(
+    `${PLATFORM_BILLING_PATH}/addon-versions/${versionId}/entitlements`,
+    { ...options, method: "PUT", body: { entitlements } },
+  );
+}
+
+export async function publishBillingAddonVersion(
+  versionId: number,
+  reason: string,
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<{ valid: boolean; validation_errors: string[]; version: BillingAddonVersion }>> {
+  return backendRequest<BaseResponse<{ valid: boolean; validation_errors: string[]; version: BillingAddonVersion }>>(
+    `${PLATFORM_BILLING_PATH}/addon-versions/${versionId}/publish`,
+    { ...options, method: "POST", body: { reason } },
+  );
+}
+
+export async function getBillingSubscriptions(
+  params: { restaurantId?: number; status?: string; search?: string } = {},
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<BillingSubscription[] | BillingSubscriptionList>> {
+  const search = new URLSearchParams();
+  if (typeof params.restaurantId === "number") search.set("restaurant_id", String(params.restaurantId));
+  if (params.status) search.set("status", params.status);
+  if (params.search) search.set("search", params.search);
+  const suffix = search.toString() ? `?${search.toString()}` : "";
+  return backendFetch<BaseResponse<BillingSubscription[] | BillingSubscriptionList>>(
+    `${PLATFORM_BILLING_PATH}/subscriptions${suffix}`,
+    options,
+  );
+}
+
+export async function getBillingAccounts(
+  params: { restaurantId?: number } = {},
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<BillingAccount[]>> {
+  const suffix = typeof params.restaurantId === "number"
+    ? `?restaurant_id=${encodeURIComponent(String(params.restaurantId))}`
+    : "";
+  return backendFetch<BaseResponse<BillingAccount[]>>(`${PLATFORM_BILLING_PATH}/accounts${suffix}`, options);
+}
+
+export async function updateBillingAccount(
+  billingAccountId: number,
+  payload: BillingAccountUpdatePayload,
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<BillingAccount>> {
+  return backendRequest<BaseResponse<BillingAccount>>(
+    `${PLATFORM_BILLING_PATH}/accounts/${billingAccountId}`,
+    { ...options, method: "PATCH", body: payload },
+  );
+}
+
+export async function replaceBillingAccountRestaurants(
+  billingAccountId: number,
+  payload: BillingAccountRestaurantsReplacePayload,
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<BillingAccount>> {
+  return backendRequest<BaseResponse<BillingAccount>>(
+    `${PLATFORM_BILLING_PATH}/accounts/${billingAccountId}/restaurants`,
+    { ...options, method: "PUT", body: payload },
+  );
+}
+
+export async function getBillingUpgradeRequests(
+  requestStatus?: string,
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<BillingUpgradeRequest[]>> {
+  const suffix = requestStatus ? `?status=${encodeURIComponent(requestStatus)}` : "";
+  return backendFetch<BaseResponse<BillingUpgradeRequest[]>>(
+    `${PLATFORM_BILLING_PATH}/upgrade-requests${suffix}`,
+    options,
+  );
+}
+
+export async function reviewBillingUpgradeRequest(
+  requestId: number,
+  payload: { status: "reviewing" | "approved" | "rejected" | "completed"; reason: string },
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<Pick<BillingUpgradeRequest, "id" | "status" | "reviewed_by" | "reviewed_at">>> {
+  return backendRequest<BaseResponse<Pick<BillingUpgradeRequest, "id" | "status" | "reviewed_by" | "reviewed_at">>>(
+    `${PLATFORM_BILLING_PATH}/upgrade-requests/${requestId}`,
+    { ...options, method: "PATCH", body: payload },
+  );
+}
+
+export async function fulfillBillingUpgradeRequest(
+  requestId: number,
+  payload: BillingUpgradeFulfillPayload,
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<{ request: BillingUpgradeRequest; subscription: BillingSubscription; invoice: BillingInvoice }>> {
+  return backendRequest<BaseResponse<{ request: BillingUpgradeRequest; subscription: BillingSubscription; invoice: BillingInvoice }>>(
+    `${PLATFORM_BILLING_PATH}/upgrade-requests/${requestId}/fulfill`,
+    { ...options, method: "POST", body: payload },
+  );
+}
+
+export async function getBillingAuditLogs(
+  billingAccountId?: number,
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<BillingAuditLog[]>> {
+  const suffix = typeof billingAccountId === "number"
+    ? `?billing_account_id=${encodeURIComponent(String(billingAccountId))}`
+    : "";
+  return backendFetch<BaseResponse<BillingAuditLog[]>>(
+    `${PLATFORM_BILLING_PATH}/audits${suffix}`,
+    options,
+  );
+}
+
+export async function assignBillingSubscription(
+  billingAccountId: number,
+  payload: BillingSubscriptionAssignPayload,
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<BillingSubscription>> {
+  return backendRequest<BaseResponse<BillingSubscription>>(
+    `${PLATFORM_BILLING_PATH}/accounts/${billingAccountId}/subscription`,
+    { ...options, method: "POST", body: payload },
+  );
+}
+
+export async function updateBillingSubscription(
+  subscriptionId: number,
+  payload: BillingSubscriptionUpdatePayload,
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<BillingSubscription>> {
+  return backendRequest<BaseResponse<BillingSubscription>>(
+    `${PLATFORM_BILLING_PATH}/subscriptions/${subscriptionId}`,
+    { ...options, method: "PATCH", body: payload },
+  );
+}
+
+export async function updateBillingSubscriptionAddons(
+  subscriptionId: number,
+  payload: BillingAddonAssignmentsPayload,
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<BillingSubscription>> {
+  return backendRequest<BaseResponse<BillingSubscription>>(
+    `${PLATFORM_BILLING_PATH}/subscriptions/${subscriptionId}/addons`,
+    { ...options, method: "PUT", body: payload },
+  );
+}
+
+export async function createBillingSubscriptionOverride(
+  subscriptionId: number,
+  payload: BillingOverrideCreatePayload,
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<BillingSubscription>> {
+  return backendRequest<BaseResponse<BillingSubscription>>(
+    `${PLATFORM_BILLING_PATH}/subscriptions/${subscriptionId}/overrides`,
+    { ...options, method: "POST", body: payload },
+  );
+}
+
+export async function deleteBillingSubscriptionOverride(
+  subscriptionId: number,
+  overrideId: number,
+  reason: string,
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<Record<string, unknown>>> {
+  return backendRequest<BaseResponse<Record<string, unknown>>>(
+    `${PLATFORM_BILLING_PATH}/subscriptions/${subscriptionId}/overrides/${overrideId}`,
+    { ...options, method: "DELETE", body: { reason } },
+  );
+}
+
+export async function getBillingInvoices(
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<BillingInvoice[]>> {
+  return backendFetch<BaseResponse<BillingInvoice[]>>(`${PLATFORM_BILLING_PATH}/invoices`, options);
+}
+
+export async function createBillingInvoice(
+  subscriptionId: number,
+  payload: BillingInvoiceCreatePayload,
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<BillingInvoice>> {
+  return backendRequest<BaseResponse<BillingInvoice>>(
+    `${PLATFORM_BILLING_PATH}/subscriptions/${subscriptionId}/invoices`,
+    { ...options, method: "POST", body: payload },
+  );
+}
+
+export async function createBillingContractInvoice(
+  subscriptionId: number,
+  payload: BillingContractInvoiceCreatePayload,
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<BillingInvoice>> {
+  return backendRequest<BaseResponse<BillingInvoice>>(
+    `${PLATFORM_BILLING_PATH}/subscriptions/${subscriptionId}/invoices/from-contract`,
+    { ...options, method: "POST", body: payload },
+  );
+}
+
+export async function getBillingPayments(
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<BillingPayment[]>> {
+  return backendFetch<BaseResponse<BillingPayment[]>>(`${PLATFORM_BILLING_PATH}/payments`, options);
+}
+
+export async function createBillingPayment(
+  invoiceId: number,
+  payload: BillingPaymentCreatePayload,
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<BillingPayment>> {
+  return backendRequest<BaseResponse<BillingPayment>>(`${PLATFORM_BILLING_PATH}/invoices/${invoiceId}/payments`, {
+    ...options,
+    method: "POST",
+    body: payload,
+  });
+}
+
+export async function voidBillingInvoice(
+  invoiceId: number,
+  reason: string,
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<BillingInvoice>> {
+  return backendRequest<BaseResponse<BillingInvoice>>(
+    `${PLATFORM_BILLING_PATH}/invoices/${invoiceId}/void`,
+    { ...options, method: "POST", body: { reason } },
+  );
+}
+
+export async function reverseBillingPayment(
+  paymentId: number,
+  reason: string,
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<BillingPayment>> {
+  return backendRequest<BaseResponse<BillingPayment>>(
+    `${PLATFORM_BILLING_PATH}/payments/${paymentId}/reverse`,
+    { ...options, method: "POST", body: { reason } },
+  );
+}
+
+export async function getBillingMetrics(
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<BillingMetrics>> {
+  return backendFetch<BaseResponse<BillingMetrics>>(`${PLATFORM_BILLING_PATH}/metrics`, options);
+}
+
+export async function runBillingLifecycle(
+  reason: string,
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<Record<string, unknown>>> {
+  return backendRequest<BaseResponse<Record<string, unknown>>>(
+    `${PLATFORM_BILLING_PATH}/lifecycle/run`,
+    { ...options, method: "POST", body: { reason } },
   );
 }

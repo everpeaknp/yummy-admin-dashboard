@@ -5,6 +5,8 @@ import { useEffect, useMemo, useState } from "react";
 import Card from "@/components/Card";
 import {
   assignBillingSubscription,
+  createBillingSubscriptionOverride,
+  deleteBillingSubscriptionOverride,
   getBillingAccounts,
   getPublicBillingCatalog,
   getBillingSubscriptions,
@@ -18,10 +20,14 @@ import {
   type BillingSubscription,
 } from "@/lib/backend-api";
 import {
+  canManageBillingOverrides,
   canManageBillingSubscriptions,
   canViewBillingSubscriptions,
   getStoredAuthSession,
 } from "@/lib/auth";
+import { activeEntitlementOverride } from "@/lib/billing-utils";
+
+const GROW_ENTITLEMENT_KEY = "grow.enabled";
 
 type Props = {
   restaurant: BackendRestaurant;
@@ -99,6 +105,7 @@ export default function RestaurantSubscriptionCard(props: Props) {
   const session = getStoredAuthSession();
   const canView = canViewBillingSubscriptions(session);
   const canManage = canManageBillingSubscriptions(session);
+  const canOverride = canManageBillingOverrides(session);
   const [mode, setMode] = useState<"loading" | "v2" | "legacy" | "error">("loading");
   const [subscription, setSubscription] = useState<BillingSubscription | null>(null);
   const [billingAccount, setBillingAccount] = useState<BillingAccount | null>(null);
@@ -116,6 +123,8 @@ export default function RestaurantSubscriptionCard(props: Props) {
   const [notes, setNotes] = useState("");
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
+  const [growBusy, setGrowBusy] = useState<"set" | "remove" | null>(null);
+  const [growReason, setGrowReason] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -138,6 +147,20 @@ export default function RestaurantSubscriptionCard(props: Props) {
     () => (subscription?.addons || []).filter((addon) => !isActiveAddon(addon)),
     [subscription],
   );
+  const activeGrowOverride = useMemo(
+    () =>
+      activeEntitlementOverride(
+        subscription?.overrides || [],
+        GROW_ENTITLEMENT_KEY,
+      ),
+    [subscription],
+  );
+  const activeGrowOverrideValue = activeGrowOverride
+    ? activeGrowOverride.override_value ?? activeGrowOverride.value
+    : undefined;
+  const growEnabled = subscription?.entitlements
+    ? Boolean(subscription.entitlements[GROW_ENTITLEMENT_KEY])
+    : activeGrowOverrideValue === true;
 
   const load = async () => {
     if (!canView) {
@@ -285,6 +308,81 @@ export default function RestaurantSubscriptionCard(props: Props) {
     }
   };
 
+  const setGrowOverride = async (enabled: boolean) => {
+    if (!subscription || growReason.trim().length < 3) {
+      setError(
+        "Provide an audit reason of at least 3 characters before changing Yummy Grow access.",
+      );
+      return;
+    }
+    setGrowBusy("set");
+    setError(null);
+    setNotice(null);
+    try {
+      await createBillingSubscriptionOverride(
+        subscription.id,
+        {
+          entitlement_key: GROW_ENTITLEMENT_KEY,
+          override_value: enabled,
+          reason: growReason.trim(),
+          starts_at: null,
+          ends_at: null,
+        },
+        { token: token() },
+      );
+      setNotice(
+        `Yummy Grow ${enabled ? "enabled" : "disabled"} through an audited subscription override.`,
+      );
+      setGrowReason("");
+      await load();
+    } catch (saveError) {
+      setError(
+        saveError instanceof Error
+          ? saveError.message
+          : "Failed to update Yummy Grow access.",
+      );
+    } finally {
+      setGrowBusy(null);
+    }
+  };
+
+  const removeGrowOverride = async () => {
+    if (
+      !subscription ||
+      !activeGrowOverride ||
+      growReason.trim().length < 3
+    ) {
+      setError(
+        "Provide an audit reason of at least 3 characters before removing the Yummy Grow override.",
+      );
+      return;
+    }
+    setGrowBusy("remove");
+    setError(null);
+    setNotice(null);
+    try {
+      await deleteBillingSubscriptionOverride(
+        subscription.id,
+        activeGrowOverride.id,
+        growReason.trim(),
+        { token: token() },
+      );
+      setNotice(
+        "Yummy Grow override removed. Access now follows the plan and active add-ons.",
+      );
+      setGrowReason("");
+      await load();
+    } catch (removeError) {
+      setError(
+        removeError instanceof Error
+          ? removeError.message
+          : "Failed to remove the Yummy Grow override.",
+      );
+    } finally {
+      setGrowBusy(null);
+    }
+  };
+
   if (mode === "loading") {
     return <Card className="p-6"><h2 className="text-lg font-bold text-slate-900">Subscription</h2><p className="mt-3 text-sm text-slate-500">Loading V2 billing account...</p></Card>;
   }
@@ -354,6 +452,79 @@ export default function RestaurantSubscriptionCard(props: Props) {
             {canManage ? <div className={`grid gap-2 ${subscription ? "grid-cols-2" : "grid-cols-1"}`}><button type="button" onClick={saveAssignment} disabled={busy} className="rounded-xl bg-orange-500 px-3 py-2.5 text-sm font-semibold text-white hover:bg-orange-600 disabled:opacity-50">{subscription ? "Assign new plan" : "Assign first plan"}</button>{subscription ? <button type="button" onClick={saveRenewal} disabled={busy} className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">Update / renew</button> : null}</div> : null}
           </div>
           {subscription ? <><div className="mt-6 border-t border-slate-100 pt-5"><h3 className="text-sm font-bold text-slate-900">Live usage</h3><div className="mt-3 space-y-2">{Object.entries(subscription.usage || {}).length ? Object.entries(subscription.usage || {}).map(([key, usage]) => <div key={key} className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2 text-xs"><span className="font-medium text-slate-600">{key}</span><span className="font-semibold text-slate-900">{usage.used} / {usage.limit === null ? "Unlimited" : usage.limit}</span></div>) : <p className="text-sm text-slate-500">No usage counters returned.</p>}</div></div><div className="mt-5 border-t border-slate-100 pt-5"><h3 className="text-sm font-bold text-slate-900">Active add-ons</h3><div className="mt-2 flex flex-wrap gap-2">{activeAddons.length ? activeAddons.map((addon) => <span key={addon.id || addon.addon_version_id} className="rounded-full bg-purple-100 px-3 py-1 text-xs font-semibold text-purple-700">{addon.name || addon.addon_name || addon.code || addon.addon_code || `Add-on version #${addon.addon_version_id}`}</span>) : <span className="text-sm text-slate-500">No active add-ons.</span>}</div>{historicalAddons.length ? <><h4 className="mt-4 text-xs font-bold uppercase tracking-wide text-slate-500">Historical add-ons</h4><div className="mt-2 flex flex-wrap gap-2">{historicalAddons.map((addon) => <span key={addon.id || addon.addon_version_id} className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">{addon.name || addon.addon_name || addon.code || addon.addon_code || `Add-on version #${addon.addon_version_id}`} · {addon.status || "ended"}</span>)}</div></> : null}</div></> : null}
+          {subscription ? (
+            <div className="mt-5 border-t border-slate-100 pt-5">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">
+                    Yummy Grow
+                  </h3>
+                  <p className="mt-1 text-xs leading-5 text-slate-500">
+                    Product access is controlled by the subscription entitlement.
+                    WhatsApp delivery remains separately gated.
+                  </p>
+                </div>
+                <span
+                  className={`rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase ${
+                    growEnabled
+                      ? "bg-emerald-100 text-emerald-700"
+                      : "bg-slate-100 text-slate-600"
+                  }`}
+                >
+                  {growEnabled ? "Enabled" : "Disabled"}
+                </span>
+              </div>
+              <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                {activeGrowOverride
+                  ? `Current value comes from override #${activeGrowOverride.id}.`
+                  : "Current value comes from the plan and active add-ons."}
+              </p>
+              {canOverride ? (
+                <div className="mt-3 space-y-3">
+                  <Field
+                    label="Grow access audit reason"
+                    value={growReason}
+                    onChange={setGrowReason}
+                    disabled={Boolean(growBusy)}
+                  />
+                  {activeGrowOverride ? (
+                    <button
+                      type="button"
+                      onClick={removeGrowOverride}
+                      disabled={
+                        Boolean(growBusy) || growReason.trim().length < 3
+                      }
+                      className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                    >
+                      {growBusy === "remove"
+                        ? "Removing..."
+                        : "Remove Grow override"}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setGrowOverride(!growEnabled)}
+                      disabled={
+                        Boolean(growBusy) || growReason.trim().length < 3
+                      }
+                      className="w-full rounded-xl bg-emerald-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+                    >
+                      {growBusy === "set"
+                        ? "Saving..."
+                        : growEnabled
+                          ? "Disable Yummy Grow"
+                          : "Enable Yummy Grow"}
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <p className="mt-3 text-xs text-amber-700">
+                  Your account needs platform.billing.overrides.manage to change
+                  Grow access.
+                </p>
+              )}
+            </div>
+          ) : null}
         </>
       )}
     </Card>

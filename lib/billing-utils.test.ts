@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  activeEntitlementOverride,
   billingNumber,
   calculateManualInvoiceTotal,
   calculateTaxedContractTotal,
@@ -29,5 +30,36 @@ describe("billing utilities", () => {
       '"\'=HYPERLINK(""https://example.test"")"',
     );
     expect(safeCsvCell("ordinary account")).toBe('"ordinary account"');
+  });
+
+  it("finds only an entitlement override active at the requested time", () => {
+    const overrides = [
+      {
+        id: 1,
+        entitlement_key: "grow.enabled",
+        starts_at: "2026-08-05T00:00:00.000Z",
+        ends_at: "2026-08-10T00:00:00.000Z",
+      },
+      {
+        id: 2,
+        entitlement_key: "grow.enabled",
+        starts_at: "2026-08-11T00:00:00.000Z",
+      },
+    ];
+
+    expect(
+      activeEntitlementOverride(
+        overrides,
+        "grow.enabled",
+        new Date("2026-08-06T00:00:00.000Z"),
+      )?.id,
+    ).toBe(1);
+    expect(
+      activeEntitlementOverride(
+        overrides,
+        "grow.enabled",
+        new Date("2026-08-04T00:00:00.000Z"),
+      ),
+    ).toBeUndefined();
   });
 });

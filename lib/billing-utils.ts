@@ -45,3 +45,29 @@ export function safeCsvCell(value: unknown): string {
   const safe = /^[=+\-@\t\r]/.test(raw) ? `'${raw}` : raw;
   return `"${safe.replaceAll('"', '""')}"`;
 }
+
+type EntitlementOverrideWindow = {
+  entitlement_key: string;
+  starts_at?: string | null;
+  ends_at?: string | null;
+};
+
+export function activeEntitlementOverride<T extends EntitlementOverrideWindow>(
+  overrides: T[],
+  entitlementKey: string,
+  now = new Date(),
+): T | undefined {
+  const timestamp = now.getTime();
+  return overrides.find((override) => {
+    if (override.entitlement_key !== entitlementKey) return false;
+    const startsAt = override.starts_at
+      ? new Date(override.starts_at).getTime()
+      : null;
+    const endsAt = override.ends_at ? new Date(override.ends_at).getTime() : null;
+    if (startsAt !== null && (Number.isNaN(startsAt) || startsAt > timestamp))
+      return false;
+    if (endsAt !== null && (Number.isNaN(endsAt) || endsAt < timestamp))
+      return false;
+    return true;
+  });
+}

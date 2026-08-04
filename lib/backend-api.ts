@@ -1030,6 +1030,7 @@ export type BillingSubscription = {
   plan_version_prices?: BillingPlanPrice[];
   addons?: BillingSubscriptionAddonAssignment[];
   overrides?: BillingSubscriptionOverride[];
+  entitlements?: Record<string, BillingEntitlementValue>;
   usage?: Record<string, BillingUsageItem>;
   created_at?: string | null;
   updated_at?: string | null;

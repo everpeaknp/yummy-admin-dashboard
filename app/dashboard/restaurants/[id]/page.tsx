@@ -431,19 +431,6 @@ export default function RestaurantDetailPage() {
           </div>
         </Card>
 
-        <RestaurantSubscriptionCard
-          restaurant={restaurant}
-          legacyMode={form.billing_mode}
-          legacyTrialEndsAt={form.trial_ends_at}
-          legacyPaidEndsAt={form.paid_ends_at}
-          legacySaving={isSaving}
-          canManageLegacy={canManageRestaurants(getStoredAuthSession())}
-          onLegacyModeChange={saveBillingMode}
-          onLegacyTrialEndsAtChange={(value) => setForm((prev) => ({ ...prev, trial_ends_at: value }))}
-          onLegacyPaidEndsAtChange={(value) => setForm((prev) => ({ ...prev, paid_ends_at: value }))}
-          onV2AvailabilityChange={setBillingV2Available}
-        />
-
         <Card className="p-6">
           <h2 className="text-lg font-bold text-slate-900">Service Flags</h2>
           <p className="mt-1 text-sm text-slate-500">Enable or disable modules from one place.</p>
@@ -477,6 +464,19 @@ export default function RestaurantDetailPage() {
             </div>
           </div>
         </Card>
+
+        <RestaurantSubscriptionCard
+          restaurant={restaurant}
+          legacyMode={form.billing_mode}
+          legacyTrialEndsAt={form.trial_ends_at}
+          legacyPaidEndsAt={form.paid_ends_at}
+          legacySaving={isSaving}
+          canManageLegacy={canManageRestaurants(getStoredAuthSession())}
+          onLegacyModeChange={saveBillingMode}
+          onLegacyTrialEndsAtChange={(value) => setForm((prev) => ({ ...prev, trial_ends_at: value }))}
+          onLegacyPaidEndsAtChange={(value) => setForm((prev) => ({ ...prev, paid_ends_at: value }))}
+          onV2AvailabilityChange={setBillingV2Available}
+        />
 
         {billingV2Available === false ? <Card className="p-6">
           <div className="flex items-start justify-between gap-4">

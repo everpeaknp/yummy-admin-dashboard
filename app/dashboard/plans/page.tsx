@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import BillingAddonCatalog from "@/components/BillingAddonCatalog";
 import BillingModal from "@/components/BillingModal";
+import SubscriptionDesk from "@/components/SubscriptionDesk";
 import {
   createBillingPlan,
   createBillingPlanVersion,
@@ -290,7 +291,7 @@ function validationFor(
   return { valid: errors.length === 0, errors, warnings };
 }
 
-export default function PlansPage() {
+function LegacyPlansPage() {
   const session = getStoredAuthSession();
   const canView = canViewBillingCatalog(session);
   const canManage = canManageBillingCatalog(session);
@@ -2273,4 +2274,8 @@ function AccessDenied({ text }: { text: string }) {
       </Panel>
     </div>
   );
+}
+
+export default function PlansPage() {
+  return <SubscriptionDesk initialView="plans" />;
 }

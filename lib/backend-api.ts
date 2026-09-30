@@ -1054,6 +1054,16 @@ export type BillingSubscriptionAssignPayload = {
   reason: string;
 };
 
+export type RestaurantPlanDirectAssignPayload = {
+  plan_version_id: number;
+  duration_months: number;
+};
+
+export type BillingSubscriptionPeriodAdjustmentPayload = {
+  days_delta: number;
+  reason?: string;
+};
+
 export type BillingSubscriptionUpdatePayload = Partial<
   Pick<
     BillingSubscription,
@@ -1579,6 +1589,18 @@ export async function reviewBillingUpgradeRequest(
   );
 }
 
+export async function resolveBillingUpgradeRequest(
+  requestId: number,
+  action: "approve" | "reject",
+  durationMonths: number | undefined,
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<{ request_id: number; status: string; subscription?: BillingSubscription }>> {
+  return backendRequest<BaseResponse<{ request_id: number; status: string; subscription?: BillingSubscription }>>(
+    `${PLATFORM_BILLING_PATH}/upgrade-requests/${requestId}/resolve`,
+    { ...options, method: "POST", body: { action, duration_months: durationMonths } },
+  );
+}
+
 export async function fulfillBillingUpgradeRequest(
   requestId: number,
   payload: BillingUpgradeFulfillPayload,
@@ -1610,6 +1632,28 @@ export async function assignBillingSubscription(
 ): Promise<BaseResponse<BillingSubscription>> {
   return backendRequest<BaseResponse<BillingSubscription>>(
     `${PLATFORM_BILLING_PATH}/accounts/${billingAccountId}/subscription`,
+    { ...options, method: "POST", body: payload },
+  );
+}
+
+export async function assignRestaurantPlanDirectly(
+  restaurantId: number,
+  payload: RestaurantPlanDirectAssignPayload,
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<BillingSubscription>> {
+  return backendRequest<BaseResponse<BillingSubscription>>(
+    `${PLATFORM_BILLING_PATH}/restaurants/${restaurantId}/direct-plan`,
+    { ...options, method: "POST", body: payload },
+  );
+}
+
+export async function adjustBillingSubscriptionPeriod(
+  subscriptionId: number,
+  payload: BillingSubscriptionPeriodAdjustmentPayload,
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<BillingSubscription>> {
+  return backendRequest<BaseResponse<BillingSubscription>>(
+    `${PLATFORM_BILLING_PATH}/subscriptions/${subscriptionId}/period-adjustment`,
     { ...options, method: "POST", body: payload },
   );
 }

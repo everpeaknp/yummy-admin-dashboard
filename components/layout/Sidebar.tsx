@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
   Store,
-  CreditCard,
   Package,
   Receipt,
   Settings,
@@ -17,7 +16,6 @@ const menuItems = [
   { href: "/dashboard/leads", label: "Leads", icon: Users },
   { href: "/dashboard/restaurants", label: "Restaurants", icon: Store },
   { href: "/dashboard/subscriptions", label: "Subscriptions", icon: Package },
-  { href: "/dashboard/payments", label: "Payments", icon: CreditCard },
   { href: "/dashboard/plans", label: "Plans", icon: Receipt },
   { href: "/dashboard/settings", label: "Settings", icon: Settings },
 ];

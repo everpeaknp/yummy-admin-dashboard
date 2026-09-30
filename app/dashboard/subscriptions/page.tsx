@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import SubscriptionDesk from "@/components/SubscriptionDesk";
 import BillingAccountManager from "@/components/BillingAccountManager";
 import {
   assignBillingSubscription,
@@ -203,7 +204,7 @@ function parseOverrideValue(raw: string): BillingEntitlementValue {
   return Number.isFinite(number) ? number : raw;
 }
 
-export default function SubscriptionsPage() {
+function LegacySubscriptionsPage() {
   const session = getStoredAuthSession();
   const canView = canViewBillingSubscriptions(session);
   const canManage = canManageBillingSubscriptions(session);
@@ -2709,4 +2710,8 @@ function Denied() {
       </section>
     </div>
   );
+}
+
+export default function SubscriptionsPage() {
+  return <SubscriptionDesk />;
 }

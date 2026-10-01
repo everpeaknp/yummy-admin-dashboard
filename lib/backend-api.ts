@@ -259,15 +259,21 @@ async function backendRequest<T>(
 ): Promise<T> {
   const url = `${getBaseUrl(options.baseUrl)}${path}`;
   const hasBody = options.body !== undefined;
+  const isFormData =
+    hasBody &&
+    typeof FormData !== "undefined" &&
+    options.body instanceof FormData;
 
   const response = await fetch(url, {
     method: options.method || "GET",
     headers: {
-      ...(hasBody ? { "Content-Type": "application/json" } : {}),
+      ...(hasBody && !isFormData ? { "Content-Type": "application/json" } : {}),
       ...(options.token ? { Authorization: `Bearer ${options.token}` } : {}),
     },
     cache: "no-store",
-    ...(hasBody ? { body: JSON.stringify(options.body) } : {}),
+    ...(hasBody
+      ? { body: isFormData ? options.body as FormData : JSON.stringify(options.body) }
+      : {}),
   });
 
   if (!response.ok) {
@@ -303,8 +309,12 @@ async function backendRequest<T>(
       // not JSON
     }
 
+    // Never expose database statements, stack traces, or infrastructure
+    // details in the admin UI. The backend logs retain the diagnostic error.
     const safeMessage =
-      (message || "").trim() || `Request failed with status ${response.status}`;
+      response.status >= 500
+        ? "The server could not complete this request. Try again or check the backend logs."
+        : (message || "").trim() || `Request failed with status ${response.status}`;
     throw new Error(`[${response.status}] ${path}: ${safeMessage}`);
   }
 
@@ -313,6 +323,108 @@ async function backendRequest<T>(
 
 export async function backendFetch<T>(path: string, options: BackendClientOptions = {}): Promise<T> {
   return backendRequest<T>(path, options);
+}
+
+export type DashboardPromoBanner = {
+  id: number;
+  image_url: string;
+  mobile_image_url: string;
+  desktop_image_url: string;
+  alt_text: string;
+  action_type: "none" | "external_url" | "internal_path";
+  action_value: string | null;
+  open_in_new_tab: boolean;
+  is_active: boolean;
+  sort_order: number;
+};
+
+export type DashboardPromoBannerUpdatePayload = {
+  alt_text?: string;
+  action_type?: "none" | "external_url" | "internal_path";
+  action_value?: string | null;
+  open_in_new_tab?: boolean;
+  is_active?: boolean;
+  sort_order?: number;
+};
+
+const DASHBOARD_BANNERS_PATH = "/admin/platform/dashboard-banners";
+
+export async function getDashboardPromoBanners(
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<DashboardPromoBanner[]>> {
+  return backendFetch<BaseResponse<DashboardPromoBanner[]>>(
+    DASHBOARD_BANNERS_PATH,
+    options,
+  );
+}
+
+export async function createDashboardPromoBanner(
+  payload: {
+    mobileFile: File;
+    desktopFile: File;
+    altText?: string;
+    actionType?: "none" | "external_url" | "internal_path";
+    actionValue?: string | null;
+    openInNewTab?: boolean;
+  },
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<DashboardPromoBanner>> {
+  const form = new FormData();
+  form.set("mobile_file", payload.mobileFile);
+  form.set("desktop_file", payload.desktopFile);
+  form.set("alt_text", payload.altText || "");
+  form.set("action_type", payload.actionType || "none");
+  if (payload.actionValue) form.set("action_value", payload.actionValue);
+  form.set("open_in_new_tab", String(Boolean(payload.openInNewTab)));
+  return backendRequest<BaseResponse<DashboardPromoBanner>>(
+    DASHBOARD_BANNERS_PATH,
+    { ...options, method: "POST", body: form },
+  );
+}
+
+export async function replaceDashboardPromoBannerImage(
+  bannerId: number,
+  variant: "mobile" | "desktop",
+  file: File,
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<DashboardPromoBanner>> {
+  const form = new FormData();
+  form.set("file", file);
+  return backendRequest<BaseResponse<DashboardPromoBanner>>(
+    `${DASHBOARD_BANNERS_PATH}/${bannerId}/${variant}-image`,
+    { ...options, method: "PUT", body: form },
+  );
+}
+
+export async function updateDashboardPromoBanner(
+  bannerId: number,
+  payload: DashboardPromoBannerUpdatePayload,
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<DashboardPromoBanner>> {
+  return backendRequest<BaseResponse<DashboardPromoBanner>>(
+    `${DASHBOARD_BANNERS_PATH}/${bannerId}`,
+    { ...options, method: "PATCH", body: payload },
+  );
+}
+
+export async function reorderDashboardPromoBanners(
+  ids: number[],
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<DashboardPromoBanner[]>> {
+  return backendRequest<BaseResponse<DashboardPromoBanner[]>>(
+    `${DASHBOARD_BANNERS_PATH}/reorder`,
+    { ...options, method: "PUT", body: { ids } },
+  );
+}
+
+export async function deleteDashboardPromoBanner(
+  bannerId: number,
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<null>> {
+  return backendRequest<BaseResponse<null>>(
+    `${DASHBOARD_BANNERS_PATH}/${bannerId}`,
+    { ...options, method: "DELETE" },
+  );
 }
 
 export type RedisHealthRead = {
@@ -1785,4 +1897,117 @@ export async function runBillingLifecycle(
     `${PLATFORM_BILLING_PATH}/lifecycle/run`,
     { ...options, method: "POST", body: { reason } },
   );
+}
+
+export type HelpGuideSection = {
+  title: string;
+  body: string;
+  bullets: string[];
+};
+
+export type HelpGuide = {
+  id: number;
+  slug: string;
+  title: string;
+  summary: string;
+  category: string;
+  icon: string;
+  sections: HelpGuideSection[];
+  estimated_minutes?: number | null;
+  sort_order: number;
+  is_featured: boolean;
+  is_published: boolean;
+};
+
+export type TutorialVideo = {
+  id: number;
+  title: string;
+  description?: string | null;
+  youtube_url: string;
+  thumbnail_url?: string | null;
+  is_main: boolean;
+  category: string;
+  duration_minutes?: number | null;
+  sort_order: number;
+  is_published: boolean;
+};
+
+export type HelpCenterSettings = {
+  heading: string;
+  subheading: string;
+  support_message: string;
+  whatsapp_number?: string | null;
+  phone_number?: string | null;
+  email?: string | null;
+  support_hours?: string | null;
+  feedback_enabled: boolean;
+};
+
+export type HelpCenter = {
+  settings: HelpCenterSettings;
+  guides: HelpGuide[];
+  videos: TutorialVideo[];
+};
+
+export type HelpGuidePayload = Omit<HelpGuide, "id">;
+export type TutorialVideoPayload = Omit<TutorialVideo, "id">;
+
+const HELP_CENTER_ADMIN_PATH = "/admin/platform/help-center";
+
+export function getHelpCenter(options: BackendClientOptions = {}) {
+  return backendFetch<BaseResponse<HelpCenter>>(HELP_CENTER_ADMIN_PATH, options);
+}
+
+export function updateHelpCenterSettings(payload: HelpCenterSettings, options: BackendClientOptions = {}) {
+  return backendRequest<BaseResponse<HelpCenterSettings>>(`${HELP_CENTER_ADMIN_PATH}/settings`, {
+    ...options,
+    method: "PUT",
+    body: payload,
+  });
+}
+
+export function createHelpGuide(payload: HelpGuidePayload, options: BackendClientOptions = {}) {
+  return backendRequest<BaseResponse<HelpGuide>>(`${HELP_CENTER_ADMIN_PATH}/guides`, {
+    ...options,
+    method: "POST",
+    body: payload,
+  });
+}
+
+export function updateHelpGuide(id: number, payload: Partial<HelpGuidePayload>, options: BackendClientOptions = {}) {
+  return backendRequest<BaseResponse<HelpGuide>>(`${HELP_CENTER_ADMIN_PATH}/guides/${id}`, {
+    ...options,
+    method: "PUT",
+    body: payload,
+  });
+}
+
+export function deleteHelpGuide(id: number, options: BackendClientOptions = {}) {
+  return backendRequest<BaseResponse<null>>(`${HELP_CENTER_ADMIN_PATH}/guides/${id}`, {
+    ...options,
+    method: "DELETE",
+  });
+}
+
+export function createTutorialVideo(payload: TutorialVideoPayload, options: BackendClientOptions = {}) {
+  return backendRequest<BaseResponse<TutorialVideo>>("/tutorial-videos", {
+    ...options,
+    method: "POST",
+    body: payload,
+  });
+}
+
+export function updateTutorialVideo(id: number, payload: Partial<TutorialVideoPayload>, options: BackendClientOptions = {}) {
+  return backendRequest<BaseResponse<TutorialVideo>>(`/tutorial-videos/${id}`, {
+    ...options,
+    method: "PUT",
+    body: payload,
+  });
+}
+
+export function deleteTutorialVideo(id: number, options: BackendClientOptions = {}) {
+  return backendRequest<BaseResponse<Record<string, never>>>(`/tutorial-videos/${id}`, {
+    ...options,
+    method: "DELETE",
+  });
 }

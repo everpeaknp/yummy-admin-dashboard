@@ -912,6 +912,32 @@ export async function updatePlatformStaffPassword(
 // ==========================================
 
 export type BillingPlanStatus = "active" | "retired" | string;
+
+export type SmsCreditPackage = {
+  id: number;
+  code: string;
+  label: string;
+  credits: number;
+  price_npr: string;
+  unit_price_npr: string;
+  is_active: boolean;
+  display_order: number;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
+export type SmsCreditPackageCreatePayload = {
+  code: string;
+  label: string;
+  credits: number;
+  price_npr: string;
+  is_active: boolean;
+  display_order: number;
+};
+
+export type SmsCreditPackageUpdatePayload = Partial<
+  Omit<SmsCreditPackageCreatePayload, "code">
+>;
 export type BillingVersionStatus = "draft" | "published" | "retired" | string;
 export type BillingSubscriptionStatus =
   | "scheduled"
@@ -1402,6 +1428,36 @@ export function isBackendRouteUnavailable(error: unknown): boolean {
 }
 
 const PLATFORM_BILLING_PATH = "/admin/platform/billing";
+
+export async function getSmsCreditPackages(
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<SmsCreditPackage[]>> {
+  return backendFetch<BaseResponse<SmsCreditPackage[]>>(
+    `${PLATFORM_BILLING_PATH}/sms-credit-packages`,
+    options,
+  );
+}
+
+export async function createSmsCreditPackage(
+  payload: SmsCreditPackageCreatePayload,
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<SmsCreditPackage>> {
+  return backendRequest<BaseResponse<SmsCreditPackage>>(
+    `${PLATFORM_BILLING_PATH}/sms-credit-packages`,
+    { ...options, method: "POST", body: payload },
+  );
+}
+
+export async function updateSmsCreditPackage(
+  packageId: number,
+  payload: SmsCreditPackageUpdatePayload,
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<SmsCreditPackage>> {
+  return backendRequest<BaseResponse<SmsCreditPackage>>(
+    `${PLATFORM_BILLING_PATH}/sms-credit-packages/${packageId}`,
+    { ...options, method: "PATCH", body: payload },
+  );
+}
 
 export async function getPublicBillingCatalog(
   options: BackendClientOptions = {},

@@ -16,6 +16,7 @@ import {
   LogOut,
   X,
   Shield,
+  MessageSquareText,
 } from "lucide-react";
 import {
   logoutSession,
@@ -53,6 +54,7 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarPr
     { href: "/dashboard/banners", label: "Dashboard banners", icon: PanelTop, permission: "platform.restaurants.manage" },
     { href: "/dashboard/help-center", label: "Guides & tutorials", icon: BookOpenCheck, permission: "platform.restaurants.manage" },
     { href: "/dashboard/plans", label: "Plans", icon: CreditCard, canAccess: canViewBillingCatalog },
+    { href: "/dashboard/sms-credits", label: "SMS credits", icon: MessageSquareText, canAccess: canViewBillingCatalog },
     { href: "/dashboard/subscriptions", label: "Subscriptions", icon: Repeat, canAccess: canViewBillingSubscriptions },
     { href: "/dashboard/staff", label: "Platform Staff", icon: Shield, canAccess: canViewPlatformStaff },
     { href: "/dashboard/settings", label: "Access & Settings", icon: Users },

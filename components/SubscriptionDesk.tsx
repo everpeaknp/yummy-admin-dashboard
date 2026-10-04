@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Check,
   CircleX,
@@ -22,11 +22,11 @@ import {
   getBillingSubscriptions,
   getBillingUpgradeRequests,
   getPublicBillingCatalog,
-  getRestaurants,
+  getPlatformRestaurantOptions,
   publishBillingPlanVersion,
   resolveBillingUpgradeRequest,
   updateBillingPlanVersionEntitlements,
-  type BackendRestaurant,
+  type BackendRestaurantOption,
   type BillingEntitlementDefinition,
   type BillingEntitlementValue,
   type BillingPlan,
@@ -54,6 +54,16 @@ function messageFrom(error: unknown, fallback: string) {
 
 function unwrapSubscriptions(data: BillingSubscription[] | { items: BillingSubscription[] }) {
   return Array.isArray(data) ? data : data.items || [];
+}
+
+function withDeadline<T>(request: Promise<T>, label: string): Promise<T> {
+  return Promise.race([
+    request,
+    new Promise<never>((_, reject) => window.setTimeout(
+      () => reject(new Error(`${label} took too long. Refresh to try again.`)),
+      10_000,
+    )),
+  ]);
 }
 
 function isCurrentVersion(version: BillingPlanVersion) {
@@ -122,7 +132,7 @@ export default function SubscriptionDesk({ initialView = "restaurants" }: { init
   const canManageOverrides = canManageBillingOverrides(session);
   const canEditCatalog = canManageBillingCatalog(session) && canPublishBillingCatalog(session);
   const [view, setView] = useState<DeskView>(initialView);
-  const [restaurants, setRestaurants] = useState<BackendRestaurant[]>([]);
+  const [restaurants, setRestaurants] = useState<BackendRestaurantOption[]>([]);
   const [subscriptions, setSubscriptions] = useState<BillingSubscription[]>([]);
   const [plans, setPlans] = useState<BillingPlan[]>([]);
   const [definitions, setDefinitions] = useState<BillingEntitlementDefinition[]>([]);
@@ -141,34 +151,55 @@ export default function SubscriptionDesk({ initialView = "restaurants" }: { init
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
-  const load = async () => {
+  const load = useCallback(async (targetView: DeskView) => {
+    setLoading(true);
     setError(null);
+    if (targetView === "history") {
+      try {
+        const response = await withDeadline(
+          getBillingSubscriptions({}, { token: token() }),
+          "Subscription history",
+        );
+        setSubscriptions(unwrapSubscriptions(response.data));
+      } catch (loadError) {
+        setError(messageFrom(loadError, "Could not load subscription history."));
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+    const results = await Promise.allSettled([
+      withDeadline(getPlatformRestaurantOptions({ token: token() }), "Restaurants"),
+      withDeadline(getBillingSubscriptions({}, { token: token() }), "Subscription history"),
+      withDeadline(getPublicBillingCatalog({ token: token() }), "Plan catalog"),
+      withDeadline(getBillingEntitlementDefinitions({ token: token() }), "Plan features"),
+      withDeadline(getBillingUpgradeRequests(undefined, { token: token() }), "Upgrade requests"),
+    ]);
+    const [restaurantsResult, subscriptionsResult, catalogResult, definitionsResult, requestsResult] = results;
     try {
-      const [restaurantsResponse, subscriptionsResponse, catalogResponse, definitionsResponse, requestsResponse] = await Promise.all([
-        getRestaurants({ token: token() }),
-        getBillingSubscriptions({}, { token: token() }),
-        getPublicBillingCatalog({ token: token() }),
-        getBillingEntitlementDefinitions({ token: token() }),
-        getBillingUpgradeRequests(undefined, { token: token() }),
-      ]);
-      const nextRestaurants = restaurantsResponse.data || [];
-      const nextPlans = catalogResponse.data?.plans || [];
+      const nextRestaurants = restaurantsResult.status === "fulfilled" ? restaurantsResult.value.data || [] : [];
+      const nextPlans = catalogResult.status === "fulfilled" ? catalogResult.value.data?.plans || [] : [];
       setRestaurants(nextRestaurants);
-      setSubscriptions(unwrapSubscriptions(subscriptionsResponse.data));
+      if (subscriptionsResult.status === "fulfilled") setSubscriptions(unwrapSubscriptions(subscriptionsResult.value.data));
       setPlans(nextPlans);
-      setDefinitions(definitionsResponse.data || []);
-      setRequests(requestsResponse.data || []);
+      if (definitionsResult.status === "fulfilled") setDefinitions(definitionsResult.value.data || []);
+      if (requestsResult.status === "fulfilled") setRequests(requestsResult.value.data || []);
       setSelectedRestaurantId((current) => current ?? nextRestaurants[0]?.id ?? null);
       setSelectedPlanId((current) => current ?? nextPlans.find((plan) => plan.status === "active")?.id ?? null);
       setFeaturePlanId((current) => current ?? nextPlans.find((plan) => plan.status === "active")?.id ?? null);
-    } catch (loadError) {
-      setError(messageFrom(loadError, "Could not load subscription administration."));
+      const failures = results
+        .filter((result): result is PromiseRejectedResult => result.status === "rejected")
+        .map((result) => messageFrom(result.reason, "A subscription request failed."));
+      if (failures.length) setError(failures.join(" "));
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  useEffect(() => { if (canView) void load(); else setLoading(false); }, [canView]);
+  useEffect(() => {
+    if (canView) void load(view);
+    else setLoading(false);
+  }, [canView, load, view]);
 
   const subscriptionForRestaurant = (restaurantId: number) =>
     subscriptions.find((subscription) => subscriptionRestaurantIds(subscription).includes(restaurantId)) || null;
@@ -221,7 +252,7 @@ export default function SubscriptionDesk({ initialView = "restaurants" }: { init
     try {
       await assignRestaurantPlanDirectly(selectedRestaurant.id, { plan_version_id: version.id, duration_months: assignmentDuration }, { token: token() });
       setNotice(`${selectedRestaurant.name} is now on ${selectedPlan.name} for ${assignmentDuration} month${assignmentDuration === 1 ? "" : "s"}.`);
-      await load();
+      await load(view);
     } catch (saveError) {
       setError(messageFrom(saveError, "Could not change this restaurant's plan."));
     } finally { setBusy(null); }
@@ -234,7 +265,7 @@ export default function SubscriptionDesk({ initialView = "restaurants" }: { init
       await adjustBillingSubscriptionPeriod(selectedSubscription.id, { days_delta: adjustmentDays }, { token: token() });
       setNotice(`${selectedRestaurant.name} now has ${adjustmentDays > 0 ? `${adjustmentDays} additional` : `${Math.abs(adjustmentDays)} fewer`} day${Math.abs(adjustmentDays) === 1 ? "" : "s"} of access.`);
       setAdjustmentDays(0);
-      await load();
+      await load(view);
     } catch (saveError) {
       setError(messageFrom(saveError, "Could not adjust the remaining access days."));
     } finally { setBusy(null); }
@@ -260,7 +291,7 @@ export default function SubscriptionDesk({ initialView = "restaurants" }: { init
       }
       if (next === base) {
         setNotice(`${definition.label || label(definition.key)} returned to its plan default.`);
-        await load();
+        await load(view);
         return;
       }
       await createBillingSubscriptionOverride(selectedSubscription.id, {
@@ -269,7 +300,7 @@ export default function SubscriptionDesk({ initialView = "restaurants" }: { init
         reason: `${next ? "Enabled" : "Disabled"} from the admin subscription desk`,
       }, { token: token() });
       setNotice(`${definition.label || label(definition.key)} ${next ? "enabled" : "disabled"} for this restaurant.`);
-      await load();
+      await load(view);
     } catch (saveError) { setError(messageFrom(saveError, "Could not update this feature.")); }
     finally { setBusy(null); }
   };
@@ -280,7 +311,7 @@ export default function SubscriptionDesk({ initialView = "restaurants" }: { init
     setBusy(`clear-${key}`); setError(null);
     try {
       await deleteBillingSubscriptionOverride(selectedSubscription.id, override.id, "Returned to plan defaults from the admin subscription desk", { token: token() });
-      setNotice("Restaurant feature returned to its plan default."); await load();
+      setNotice("Restaurant feature returned to its plan default."); await load(view);
     } catch (saveError) { setError(messageFrom(saveError, "Could not remove this feature override.")); }
     finally { setBusy(null); }
   };
@@ -290,7 +321,7 @@ export default function SubscriptionDesk({ initialView = "restaurants" }: { init
     try {
       await resolveBillingUpgradeRequest(request.id, action, request.billing_interval_months || assignmentDuration, { token: token() });
       setNotice(action === "approve" ? "Request approved and plan assigned." : "Request rejected.");
-      await load();
+      await load(view);
     } catch (saveError) { setError(messageFrom(saveError, "Could not resolve this request.")); }
     finally { setBusy(null); }
   };
@@ -302,7 +333,7 @@ export default function SubscriptionDesk({ initialView = "restaurants" }: { init
       const draft = await createBillingPlanVersion(selectedFeaturePlan.id, { source_version_id: selectedFeatureVersion.id }, { token: token() });
       await updateBillingPlanVersionEntitlements(draft.data.id, featureDraft, { token: token() });
       await publishBillingPlanVersion(draft.data.id, "Plan features updated from the admin subscription desk", { token: token() });
-      setNotice(`${selectedFeaturePlan.name} features published.`); await load();
+      setNotice(`${selectedFeaturePlan.name} features published.`); await load(view);
     } catch (saveError) { setError(messageFrom(saveError, "Could not publish the plan features.")); }
     finally { setBusy(null); }
   };
@@ -314,7 +345,7 @@ export default function SubscriptionDesk({ initialView = "restaurants" }: { init
       <div className="mx-auto max-w-7xl">
         <header className="flex flex-col gap-5 border-b border-slate-200 pb-6 sm:flex-row sm:items-end sm:justify-between">
           <div><p className="text-sm font-medium text-orange-600">Subscription desk</p><h1 className="mt-1 text-3xl font-semibold tracking-tight">Restaurant access, made simple.</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">Choose a restaurant, assign a plan term, and grant a specific feature only when it is needed.</p></div>
-          <button type="button" onClick={() => void load()} className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold hover:bg-slate-100">Refresh</button>
+          <button type="button" onClick={() => void load(view)} className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold hover:bg-slate-100">Refresh</button>
         </header>
 
         <nav className="mt-6 inline-flex rounded-xl border border-slate-200 bg-white p-1" aria-label="Subscription desk">
@@ -326,7 +357,7 @@ export default function SubscriptionDesk({ initialView = "restaurants" }: { init
         {loading ? <div className="flex min-h-[45vh] items-center justify-center"><Loader2 className="h-7 w-7 animate-spin text-orange-500" /></div> : null}
 
         {!loading && view === "restaurants" ? <section className="mt-6 grid gap-6 lg:grid-cols-[minmax(18rem,0.8fr)_minmax(0,1.6fr)]"><div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><label className="relative block"><Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-slate-400" /><input value={restaurantQuery} onChange={(event) => setRestaurantQuery(event.target.value)} placeholder="Find a restaurant" className="h-10 w-full rounded-xl border border-slate-200 pl-9 pr-3 text-sm outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100" /></label><div className="mt-3 grid grid-cols-2 gap-2"><select value={planFilter} onChange={(event) => setPlanFilter(event.target.value)} className="h-9 rounded-lg border border-slate-200 bg-white px-2 text-xs font-medium"><option value="all">All plans</option><option value="unassigned">No plan</option>{activePlans.map((plan) => <option key={plan.id} value={plan.code}>{plan.name}</option>)}</select><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="h-9 rounded-lg border border-slate-200 bg-white px-2 text-xs font-medium"><option value="all">All statuses</option><option value="active">Active</option><option value="expired">Expired</option><option value="canceled">Canceled</option><option value="unassigned">No plan</option></select></div><div className="mt-3 max-h-[60vh] divide-y overflow-y-auto">{filteredRestaurants.map((restaurant) => <button key={restaurant.id} type="button" onClick={() => setSelectedRestaurantId(restaurant.id)} className={`w-full px-2 py-3 text-left ${restaurant.id === selectedRestaurantId ? "rounded-lg bg-orange-50" : "hover:bg-slate-50"}`}><p className="text-sm font-semibold">{restaurant.name}</p><p className="mt-0.5 truncate text-xs text-slate-500">{restaurantAssignmentSummary(restaurant.id)}</p></button>)}</div></div>
-          <div className="min-w-0 rounded-2xl border border-slate-200 bg-white shadow-sm">{selectedRestaurant ? <><div className="border-b border-slate-200 px-5 py-5 sm:px-6"><div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><p className="text-sm text-slate-500">Selected restaurant</p><h2 className="mt-1 text-2xl font-semibold tracking-tight">{selectedRestaurant.name}</h2><p className="mt-1 text-sm text-slate-500">Current plan: <span className="font-medium text-slate-800">{selectedSubscription?.plan_name || selectedRestaurant.effective_plan || "No assigned plan"}</span></p>{selectedSubscription?.current_period_end ? <p className="mt-1 text-sm font-medium text-slate-700">{remainingLabel(selectedSubscription)} <span className="font-normal text-slate-500">· ends {new Date(selectedSubscription.current_period_end).toLocaleDateString()}</span></p> : null}</div><span className="inline-flex w-fit rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">{selectedSubscription?.effective_status || selectedRestaurant.plan_state || "Ready"}</span></div></div>
+          <div className="min-w-0 rounded-2xl border border-slate-200 bg-white shadow-sm">{selectedRestaurant ? <><div className="border-b border-slate-200 px-5 py-5 sm:px-6"><div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><p className="text-sm text-slate-500">Selected restaurant</p><h2 className="mt-1 text-2xl font-semibold tracking-tight">{selectedRestaurant.name}</h2><p className="mt-1 text-sm text-slate-500">Current plan: <span className="font-medium text-slate-800">{selectedSubscription?.plan_name || "No assigned plan"}</span></p>{selectedSubscription?.current_period_end ? <p className="mt-1 text-sm font-medium text-slate-700">{remainingLabel(selectedSubscription)} <span className="font-normal text-slate-500">· ends {new Date(selectedSubscription.current_period_end).toLocaleDateString()}</span></p> : null}</div><span className="inline-flex w-fit rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">{selectedSubscription?.effective_status || "Ready"}</span></div></div>
             <div className="p-5 sm:p-6"><h3 className="text-base font-semibold">Change plan</h3><p className="mt-1 text-sm text-slate-500">Choose the plan and its term. Access ends automatically when the term ends; no invoice is created.</p><div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">{activePlans.map((plan) => { const version = currentVersion(plan); const selected = plan.id === selectedPlan?.id; return <button key={plan.id} type="button" onClick={() => setSelectedPlanId(plan.id)} className={`rounded-xl border p-4 text-left transition-colors ${selected ? "border-orange-500 bg-orange-50 ring-1 ring-orange-500" : "border-slate-200 hover:border-slate-300"}`}><div className="flex items-center justify-between gap-2"><p className="font-semibold">{plan.name}</p>{selected ? <Check className="h-4 w-4 text-orange-600" /> : null}</div><p className="mt-1 text-xs leading-5 text-slate-500">{plan.description || "Custom plan features"}</p><p className="mt-3 text-xs font-medium text-slate-600">Version {version?.version_number}</p></button>})}</div><div className="mt-5 max-w-xs"><label className="text-sm font-semibold text-slate-700">Assignment term<select value={assignmentDuration} onChange={(event) => setAssignmentDuration(Number(event.target.value))} className="mt-2 h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm font-medium">{assignmentTerms.map((months) => <option key={months} value={months}>{months} month{months === 1 ? "" : "s"}</option>)}</select></label><p className="mt-2 text-xs text-slate-500">The plan will expire after this term unless it is renewed or changed.</p></div><button type="button" disabled={!canManagePlans || !selectedPlan || busy === "apply-plan"} onClick={() => void applyPlan()} className="mt-5 inline-flex h-11 items-center justify-center rounded-xl bg-orange-500 px-5 text-sm font-semibold text-white shadow-sm hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50">{busy === "apply-plan" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}Apply {selectedPlan?.name || "plan"}</button></div>
             {selectedSubscription ? <section className="border-t border-slate-200 px-5 py-5 sm:px-6"><div className="flex flex-col gap-4 rounded-xl border border-slate-200 bg-slate-50 p-4 sm:flex-row sm:items-end sm:justify-between"><div><h3 className="text-base font-semibold">Adjust remaining days</h3><p className="mt-1 max-w-lg text-sm text-slate-500">Use a positive number to extend access or a negative number to shorten it. The plan and its features stay the same.</p></div><div className="flex w-full gap-2 sm:w-auto"><label className="min-w-0 flex-1 sm:w-36"><span className="sr-only">Days to add or remove</span><input type="number" min={-3650} max={3650} value={adjustmentDays || ""} onChange={(event) => setAdjustmentDays(event.target.value === "" ? 0 : Number(event.target.value))} placeholder="e.g. +7" className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm font-semibold outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100" /></label><button type="button" disabled={!canManagePlans || adjustmentDays === 0 || busy === "adjust-days"} onClick={() => void adjustRemainingDays()} className="h-11 shrink-0 rounded-xl border border-orange-200 bg-white px-4 text-sm font-semibold text-orange-700 hover:bg-orange-50 disabled:cursor-not-allowed disabled:opacity-50">{busy === "adjust-days" ? "Saving..." : adjustmentDays > 0 ? `Add ${adjustmentDays}d` : adjustmentDays < 0 ? `Remove ${Math.abs(adjustmentDays)}d` : "Adjust days"}</button></div></div></section> : null}
             <FeatureOverrides definitions={booleanDefinitions} subscription={selectedSubscription} canManage={canManageOverrides} busy={busy} onToggle={toggleOverride} onClear={clearOverride} />
@@ -353,6 +384,6 @@ function PlanFeatureField({ definition, value, onChange }: { definition: Billing
   return <div className="flex min-h-20 items-center gap-3 px-5 py-4 sm:px-6"><div className="min-w-0 flex-1"><p className="text-sm font-semibold">{definition.label || label(definition.key)}</p><p className="mt-0.5 text-xs leading-5 text-slate-500">{definition.description || definition.key}</p></div>{definition.value_type === "boolean" ? <Toggle checked={Boolean(value)} onClick={() => onChange(!Boolean(value))} /> : <input value={value == null ? "" : String(value)} type={definition.value_type === "integer" ? "number" : "text"} min={definition.value_type === "integer" ? 0 : undefined} onChange={(event) => onChange(definition.value_type === "integer" ? (event.target.value === "" ? null : Number(event.target.value)) : event.target.value)} className="h-9 w-24 rounded-lg border border-slate-200 px-2 text-sm outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100" />}</div>;
 }
 
-function Notice({ tone, children }: { tone: "error" | "success"; children: React.ReactNode }) { return <div className={`mt-5 rounded-xl border px-4 py-3 text-sm ${tone === "error" ? "border-red-200 bg-red-50 text-red-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>{children}</div>; }
+function Notice({ tone, children }: { tone: "error" | "success"; children: React.ReactNode }) { return <div role={tone === "error" ? "alert" : "status"} aria-live="polite" className={`mt-5 rounded-xl border px-4 py-3 text-sm ${tone === "error" ? "border-red-200 bg-red-50 text-red-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>{children}</div>; }
 function Empty({ text }: { text: string }) { return <div className="px-6 py-12 text-center text-sm text-slate-500">{text}</div>; }
 function AccessDenied() { return <main className="grid min-h-screen place-items-center bg-slate-50 p-6"><div className="max-w-md rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm"><h1 className="text-xl font-semibold">Subscription access is unavailable</h1><p className="mt-2 text-sm text-slate-500">Ask a platform administrator for billing access.</p></div></main>; }

@@ -338,6 +338,26 @@ export type DashboardPromoBanner = {
   sort_order: number;
 };
 
+export type BackendRestaurantOption = Pick<
+  BackendRestaurant,
+  | "id"
+  | "name"
+  | "address"
+  | "phone"
+  | "registered_by"
+  | "profile_picture"
+  | "cover_photo"
+  | "timezone"
+  | "kot_enabled"
+  | "hotel_enabled"
+  | "restaurant_enabled"
+  | "attendance_enabled"
+  | "billing_mode"
+  | "plan_state"
+  | "trial_ends_at"
+  | "paid_ends_at"
+>;
+
 export type DashboardPromoBannerUpdatePayload = {
   alt_text?: string;
   action_type?: "none" | "external_url" | "internal_path";
@@ -456,6 +476,15 @@ export async function getRestaurants(
   options: BackendClientOptions = {},
 ): Promise<BaseResponse<BackendRestaurant[]>> {
   return backendFetch<BaseResponse<BackendRestaurant[]>>("/restaurants", options);
+}
+
+export async function getPlatformRestaurantOptions(
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<BackendRestaurantOption[]>> {
+  return backendFetch<BaseResponse<BackendRestaurantOption[]>>(
+    "/admin/platform/restaurants/options",
+    options,
+  );
 }
 
 export async function getRestaurant(

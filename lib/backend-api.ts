@@ -325,6 +325,26 @@ export async function backendFetch<T>(path: string, options: BackendClientOption
   return backendRequest<T>(path, options);
 }
 
+export type MenuImportPayload = {
+  version: 1;
+  categories: Array<{ name: string; type: "kitchen" | "bar" | "cafe" }>;
+  modifier_groups: Array<{ name: string; required?: boolean; min_selections?: number; max_selections?: number | null; options: Array<{ name: string; price_adjustment?: number; is_default?: boolean }> }>;
+  items: Array<{ name: string; price: number; category: string; description?: string | null; modifier_groups?: string[] }>;
+};
+
+export type MenuImportResult = {
+  valid?: boolean;
+  errors?: string[];
+  duplicates?: string[];
+  summary?: Record<string, number>;
+  created?: Record<string, number>;
+  skipped_duplicates?: string[];
+};
+
+export function importRestaurantMenu(restaurantId: number, payload: MenuImportPayload, confirm: boolean, options: BackendClientOptions = {}) {
+  return backendRequest<BaseResponse<MenuImportResult>>(`/admin/platform/restaurants/${restaurantId}/menu-import`, { ...options, method: "POST", body: { payload, confirm } });
+}
+
 export type DashboardPromoBanner = {
   id: number;
   image_url: string;

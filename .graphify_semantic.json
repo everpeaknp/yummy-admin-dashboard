@@ -1,0 +1,125 @@
+{
+  "nodes": [
+    {
+      "id": "repo_yummy_admin_dashboard",
+      "label": "Yummy Admin Dashboard",
+      "file_type": "document",
+      "source_file": "README.md",
+      "source_location": null
+    },
+    {
+      "id": "bulk_menu_import",
+      "label": "Bulk Menu Import",
+      "file_type": "document",
+      "source_file": "docs/ADMIN_API_CONTRACT.md",
+      "source_location": null
+    },
+    {
+      "id": "menu_import_validation",
+      "label": "Import Validation and Preview",
+      "file_type": "document",
+      "source_file": "docs/ADMIN_API_CONTRACT.md",
+      "source_location": null
+    },
+    {
+      "id": "menu_cache_invalidation",
+      "label": "Menu Cache Invalidation",
+      "file_type": "document",
+      "source_file": "docs/ADMIN_API_CONTRACT.md",
+      "source_location": null
+    },
+    {
+      "id": "app_apple_icon_yummy_brand_mark",
+      "label": "Yummy Brand Mark",
+      "file_type": "image",
+      "source_file": "app/apple-icon.png",
+      "source_location": null
+    },
+    {
+      "id": "app_icon_yummy_brand_mark",
+      "label": "Yummy Brand Mark",
+      "file_type": "image",
+      "source_file": "app/icon.png",
+      "source_location": null
+    },
+    {
+      "id": "public_file_document_icon",
+      "label": "Document File Icon",
+      "file_type": "image",
+      "source_file": "public/file.svg",
+      "source_location": null
+    },
+    {
+      "id": "public_globe_global_icon",
+      "label": "Global Globe Icon",
+      "file_type": "image",
+      "source_file": "public/globe.svg",
+      "source_location": null
+    },
+    {
+      "id": "asset_public_next_svg",
+      "label": "Next.js Asset",
+      "file_type": "image",
+      "source_file": "public/next.svg",
+      "source_location": null
+    },
+    {
+      "id": "asset_public_vercel_svg",
+      "label": "Vercel Asset",
+      "file_type": "image",
+      "source_file": "public/vercel.svg",
+      "source_location": null
+    },
+    {
+      "id": "asset_public_yummy_logo",
+      "label": "Yummy Logo",
+      "file_type": "image",
+      "source_file": "public/yummy_logo.png",
+      "source_location": null
+    }
+  ],
+  "edges": [
+    {
+      "source": "bulk_menu_import",
+      "target": "menu_import_validation",
+      "relation": "references",
+      "confidence": "INFERRED",
+      "confidence_score": 0.9,
+      "source_file": "docs/ADMIN_API_CONTRACT.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "bulk_menu_import",
+      "target": "menu_cache_invalidation",
+      "relation": "references",
+      "confidence": "INFERRED",
+      "confidence_score": 0.9,
+      "source_file": "docs/ADMIN_API_CONTRACT.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "app_apple_icon_yummy_brand_mark",
+      "target": "app_icon_yummy_brand_mark",
+      "relation": "semantically_similar_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "app/icon.png",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "asset_public_yummy_logo",
+      "target": "repo_yummy_admin_dashboard",
+      "relation": "references",
+      "confidence": "INFERRED",
+      "confidence_score": 0.9,
+      "source_file": "public/yummy_logo.png",
+      "source_location": null,
+      "weight": 1.0
+    }
+  ],
+  "input_tokens": 4735,
+  "output_tokens": 2243
+}

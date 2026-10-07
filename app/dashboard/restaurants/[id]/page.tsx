@@ -391,6 +391,15 @@ export default function RestaurantDetailPage() {
         <div className="flex flex-wrap items-center gap-3">
           {canManageRestaurants(getStoredAuthSession()) && (
             <Link
+              href={`/dashboard/restaurants/${restaurant.id}/menu-import`}
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
+            >
+              <span className="material-icons-round text-[18px]">upload_file</span>
+              Import menu
+            </Link>
+          )}
+          {canManageRestaurants(getStoredAuthSession()) && (
+            <Link
               href={`/dashboard/restaurants/${restaurant.id}/compliance`}
               className="inline-flex items-center gap-2 rounded-xl border border-orange-200 bg-orange-50 px-4 py-3 text-sm font-semibold text-orange-700 transition-colors hover:bg-orange-100"
             >

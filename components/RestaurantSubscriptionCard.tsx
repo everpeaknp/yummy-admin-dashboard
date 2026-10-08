@@ -8,6 +8,7 @@ import {
   createBillingSubscriptionOverride,
   deleteBillingSubscriptionOverride,
   getBillingEntitlementDefinitions,
+  getBillingPlanVersion,
   getBillingSubscriptions,
   getPublicBillingCatalog,
   isBackendRouteUnavailable,
@@ -125,10 +126,20 @@ export default function RestaurantSubscriptionCard(props: Props) {
       ]);
       const history = unwrap(subscriptionsResponse.data).filter((subscription) => matchesRestaurant(subscription, props.restaurant.id));
       const catalogPlans = catalogResponse.data?.plans || [];
-      setSubscriptions(history);
+      const activeSubscription = history.find((subscription) => ["active", "trialing", "grace"].includes(subscription.effective_status || subscription.status)) || history[0] || null;
+      const catalogVersion = activeSubscription
+        ? catalogPlans.flatMap((plan) => plan.versions || [currentVersion(plan)].filter(Boolean)).find((version) => version?.id === activeSubscription.plan_version_id) || null
+        : null;
+      const assignedVersion = activeSubscription
+        ? await getBillingPlanVersion(activeSubscription.plan_version_id, { token: token() }).then((response) => response.data || catalogVersion).catch(() => catalogVersion)
+        : null;
+      const hydratedHistory = activeSubscription && assignedVersion
+        ? history.map((subscription) => subscription.id === activeSubscription.id ? { ...subscription, plan_version: assignedVersion } : subscription)
+        : history;
+      setSubscriptions(hydratedHistory);
       setPlans(catalogPlans);
       setDefinitions(definitionsResponse.data || []);
-      setSelectedPlanId((current) => current ?? catalogPlans.find((plan) => plan.status === "active" && currentVersion(plan))?.id ?? null);
+      setSelectedPlanId((current) => current ?? assignedVersion?.plan_id ?? catalogVersion?.plan_id ?? catalogPlans.find((plan) => plan.status === "active" && currentVersion(plan))?.id ?? null);
       setMode("v2");
       props.onV2AvailabilityChange?.(true);
     } catch (loadError) {
@@ -316,10 +327,45 @@ export default function RestaurantSubscriptionCard(props: Props) {
 }
 
 function FeatureOverrides({ definitions, subscription, canManage, busy, onToggle, onClear }: { definitions: BillingEntitlementDefinition[]; subscription: BillingSubscription | null; canManage: boolean; busy: string | null; onToggle: (definition: BillingEntitlementDefinition) => Promise<void>; onClear: (definition: BillingEntitlementDefinition) => Promise<void> }) {
-  if (!subscription) return <section className="border-t border-slate-200 px-6 py-6 sm:px-7"><h3 className="text-lg font-bold text-slate-950">Extra features</h3><p className="mt-1 text-sm text-slate-500">Assign a plan before giving this restaurant a feature exception.</p></section>;
+  if (!subscription) return <section className="border-t border-slate-200 px-6 py-6 sm:px-7"><h3 className="text-lg font-bold text-slate-950">Feature access</h3><p className="mt-1 text-sm text-slate-500">Assign a plan before reviewing this restaurant's feature access.</p></section>;
   const planEntitlements = typeof subscription.plan_version === "object" ? subscription.plan_version?.entitlements || {} : {};
   const visibleDefinitions = definitions.filter((definition) => definition.is_client_visible !== false);
-  return <section className="border-t border-slate-200 px-6 py-6 sm:px-7"><div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between"><div><h3 className="text-lg font-bold text-slate-950">Extra features</h3><p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">Give this restaurant a specific exception when needed. Resetting an exception returns the feature to the plan default.</p></div><span className="w-fit rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">{subscription.overrides?.length || 0} exceptions</span></div><div className="mt-5 grid overflow-hidden rounded-2xl border border-slate-200 sm:grid-cols-2">{visibleDefinitions.map((definition) => { const override = subscription.overrides?.find((item) => item.entitlement_key === definition.key); const base = Boolean(planEntitlements[definition.key]); const value = override ? Boolean(override.override_value ?? override.value) : base; const changing = busy === `override-${definition.key}` || busy === `clear-${definition.key}`; return <div key={definition.key} className="flex min-h-24 items-center gap-3 border-b border-slate-200 p-4 last:border-b-0 sm:[&:nth-last-child(2):nth-child(odd)]:border-b-0"><Toggle checked={value} disabled={!canManage || changing} onClick={() => void onToggle(definition)} /><div className="min-w-0 flex-1"><p className="text-sm font-bold text-slate-900">{definition.label || label(definition.key)}</p><p className="mt-1 text-xs text-slate-500">{override ? "Restaurant exception" : base ? "Included in this plan" : "Not included in this plan"}</p></div>{override ? <button type="button" disabled={!canManage || changing} onClick={() => void onClear(definition)} className="text-xs font-bold text-orange-700 hover:text-orange-800 disabled:opacity-50">Reset</button> : null}</div>; })}</div>{!visibleDefinitions.length ? <p className="mt-4 text-sm text-slate-500">No feature controls are available for this catalog.</p> : null}{!canManage ? <p className="mt-3 text-xs text-slate-500">You need feature-override permission to change these switches.</p> : null}</section>;
+  const includedCount = visibleDefinitions.filter((definition) => Boolean(planEntitlements[definition.key])).length;
+  const planName = subscription.plan_name || subscription.plan_code || "this plan";
+
+  return <section className="border-t border-slate-200 px-6 py-6 sm:px-7">
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+      <div>
+        <h3 className="text-lg font-bold text-slate-950">Feature access</h3>
+        <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">The plan is the default. Restaurant exceptions are shown explicitly and can be reset at any time.</p>
+      </div>
+      <div className="flex flex-wrap gap-2 text-xs font-semibold">
+        <span className="rounded-full bg-emerald-50 px-3 py-1 text-emerald-700">{includedCount} included in plan</span>
+        <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-600">{subscription.overrides?.length || 0} exceptions</span>
+      </div>
+    </div>
+    <div className="mt-5 grid overflow-hidden rounded-2xl border border-slate-200 sm:grid-cols-2">
+      {visibleDefinitions.map((definition) => {
+        const override = subscription.overrides?.find((item) => item.entitlement_key === definition.key);
+        const base = Boolean(planEntitlements[definition.key]);
+        const value = override ? Boolean(override.override_value ?? override.value) : base;
+        const changing = busy === `override-${definition.key}` || busy === `clear-${definition.key}`;
+        const stateLabel = value ? "Available" : "Not included";
+        const stateClass = value ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600";
+        const actionLabel = value ? "Disable for restaurant" : "Enable exception";
+
+        return <div key={definition.key} className="flex min-h-28 items-center gap-3 border-b border-slate-200 p-4 last:border-b-0 sm:[&:nth-last-child(2):nth-child(odd)]:border-b-0">
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2"><p className="text-sm font-bold text-slate-900">{definition.label || label(definition.key)}</p><span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${stateClass}`}>{stateLabel}</span></div>
+            <p className="mt-1 text-xs leading-5 text-slate-500">{override ? `Restaurant exception: ${value ? "available" : "unavailable"}.` : base ? `Included in ${planName}.` : `Not included in ${planName}.`}</p>
+          </div>
+          {override ? <button type="button" disabled={!canManage || changing} onClick={() => void onClear(definition)} className="shrink-0 text-xs font-bold text-orange-700 hover:text-orange-800 disabled:opacity-50">{changing ? "Saving..." : "Reset"}</button> : canManage ? <button type="button" disabled={changing} onClick={() => void onToggle(definition)} className="shrink-0 text-xs font-bold text-slate-700 hover:text-orange-700 disabled:opacity-50">{changing ? "Saving..." : actionLabel}</button> : null}
+        </div>;
+      })}
+    </div>
+    {!visibleDefinitions.length ? <p className="mt-4 text-sm text-slate-500">No feature controls are available for this catalog.</p> : null}
+    {!canManage ? <p className="mt-3 text-xs text-slate-500">You have read-only access to plan features and restaurant exceptions.</p> : null}
+  </section>;
 }
 
 function AssignmentHistory({ subscriptions }: { subscriptions: BillingSubscription[] }) {
@@ -328,10 +374,6 @@ function AssignmentHistory({ subscriptions }: { subscriptions: BillingSubscripti
 
 function LegacyCard(props: Props) {
   return <Card className="p-6 xl:col-span-3"><div className="max-w-2xl"><p className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-700">Compatibility mode</p><h2 className="mt-2 text-xl font-bold text-slate-950">Legacy plan access</h2><p className="mt-2 text-sm leading-6 text-slate-600">Subscription V2 is not available on this backend. These fields only maintain the previous restaurant access behaviour.</p></div><div className="mt-6 grid gap-3 md:grid-cols-3"><LegacyToggle label="Paid" description="Legacy full access" active={props.legacyMode === "paid"} disabled={!props.canManageLegacy || props.legacySaving} onClick={() => props.onLegacyModeChange("paid")} /><LegacyToggle label="Free" description="Legacy free access" active={props.legacyMode === "free"} disabled={!props.canManageLegacy || props.legacySaving} onClick={() => props.onLegacyModeChange("free")} /><LegacyToggle label="Trial" description="Legacy paid trial" active={props.legacyMode === "trial_paid"} disabled={!props.canManageLegacy || props.legacySaving} onClick={() => props.onLegacyModeChange("trial_paid")} /></div><div className="mt-5 grid gap-4 md:grid-cols-2"><LegacyField label="Legacy trial ends" value={props.legacyTrialEndsAt} onChange={props.onLegacyTrialEndsAtChange} disabled={!props.canManageLegacy} /><LegacyField label="Legacy paid period ends" value={props.legacyPaidEndsAt} onChange={props.onLegacyPaidEndsAtChange} disabled={!props.canManageLegacy} /></div></Card>;
-}
-
-function Toggle({ checked, disabled, onClick }: { checked: boolean; disabled?: boolean; onClick: () => void }) {
-  return <button type="button" role="switch" aria-checked={checked} disabled={disabled} onClick={onClick} className={`relative inline-flex h-7 w-12 shrink-0 overflow-hidden rounded-full border-2 p-0 transition-colors focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${checked ? "border-orange-500 bg-orange-500" : "border-slate-300 bg-white"}`}><span aria-hidden="true" className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-[left] duration-150 ${checked ? "left-[22px]" : "left-0.5"}`} /></button>;
 }
 
 function Status({ value }: { value: string }) { const tone = value === "active" ? "bg-emerald-100 text-emerald-700" : value === "trialing" ? "bg-blue-100 text-blue-700" : value === "unassigned" ? "bg-slate-100 text-slate-600" : "bg-amber-100 text-amber-800"; return <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide ${tone}`}>{value}</span>; }

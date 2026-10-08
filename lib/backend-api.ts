@@ -987,6 +987,65 @@ export type SmsCreditPackageCreatePayload = {
 export type SmsCreditPackageUpdatePayload = Partial<
   Omit<SmsCreditPackageCreatePayload, "code">
 >;
+
+export type PlatformSmsCapacity = {
+  generated_at: string;
+  provider_balance: {
+    available_credits: number;
+    safety_buffer_credits: number;
+    last_updated_at?: string | null;
+    source: "manual_sms_pasal_check" | string;
+  };
+  recommended_top_up: {
+    coverage_target_credits: number;
+    restaurant_commitment_credits: number;
+    platform_forecast_30d_credits: number;
+    safety_buffer_credits: number;
+    credits_to_add: number;
+  };
+  restaurants: {
+    total: number;
+    with_sms_wallet: number;
+    paid_purchase_count: number;
+    purchased_credits: number;
+    purchased_npr: number;
+    available_credits: number;
+    reserved_credits: number;
+    consumed_credits: number;
+    rows: Array<{
+      restaurant_id: number;
+      restaurant_name: string;
+      purchase_count: number;
+      purchased_credits: number;
+      purchased_npr: number;
+      available_credits: number;
+      reserved_credits: number;
+    }>;
+  };
+  customers: {
+    local_customers: number;
+    customer_accounts: number;
+    verified_phone_accounts: number;
+  };
+  forecast: {
+    window_days: number;
+    customer_accounts_created_7d: number;
+    customer_accounts_created_30d: number;
+    forecast_customer_accounts_next_30d: number;
+    restaurant_customers_created_7d: number;
+    restaurant_customers_created_30d: number;
+    forecast_restaurant_customers_next_30d: number;
+    successful_phone_otp_sms_30d: number;
+    new_customer_phone_contacts_30d: number;
+    estimated_platform_sms_next_30d: number;
+    assumptions: string[];
+  };
+};
+
+export type PlatformSmsCapacitySettingsPayload = {
+  provider_available_credits: number;
+  safety_buffer_credits: number;
+};
 export type BillingVersionStatus = "draft" | "published" | "retired" | string;
 export type BillingSubscriptionStatus =
   | "scheduled"
@@ -1484,6 +1543,22 @@ export async function getSmsCreditPackages(
   return backendFetch<BaseResponse<SmsCreditPackage[]>>(
     `${PLATFORM_BILLING_PATH}/sms-credit-packages`,
     options,
+  );
+}
+
+export async function getPlatformSmsCapacity(
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<PlatformSmsCapacity>> {
+  return backendFetch<BaseResponse<PlatformSmsCapacity>>("/admin/platform/sms-capacity", options);
+}
+
+export async function updatePlatformSmsCapacitySettings(
+  payload: PlatformSmsCapacitySettingsPayload,
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<PlatformSmsCapacitySettingsPayload>> {
+  return backendRequest<BaseResponse<PlatformSmsCapacitySettingsPayload>>(
+    "/admin/platform/sms-capacity/settings",
+    { ...options, method: "PUT", body: payload },
   );
 }
 

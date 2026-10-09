@@ -452,7 +452,7 @@ export default function RestaurantDetailPage() {
 
         <Card className="border-dashed bg-slate-50 p-6">
           <h2 className="text-lg font-bold text-slate-900">Access is managed by the plan</h2>
-          <p className="mt-2 text-sm leading-6 text-slate-600">Plan features and restaurant exceptions appear below. Operational pauses are kept separate so they cannot be mistaken for the restaurant's subscription.</p>
+          <p className="mt-2 text-sm leading-6 text-slate-600">Plan features and restaurant exceptions appear below. Operational pauses are kept separate so they cannot be mistaken for the restaurant&apos;s subscription.</p>
         </Card>
 
         <RestaurantSubscriptionCard
@@ -630,7 +630,7 @@ function OperationalAvailabilityCard({
         <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-6 py-5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-orange-500 sm:px-7">
           <div>
             <h2 className="text-lg font-bold text-slate-900">Operational availability</h2>
-            <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">Use only to pause a module for setup, maintenance, or an emergency. This does not change the restaurant's plan.</p>
+            <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">Use only to pause a module for setup, maintenance, or an emergency. This does not change the restaurant&apos;s plan.</p>
           </div>
           <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${paused ? "bg-amber-50 text-amber-800" : "bg-emerald-50 text-emerald-700"}`}>{paused ? `${paused} paused` : "No pauses"}</span>
         </summary>

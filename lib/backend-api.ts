@@ -325,6 +325,29 @@ export async function backendFetch<T>(path: string, options: BackendClientOption
   return backendRequest<T>(path, options);
 }
 
+export type NotificationSound = "kitchen_bell" | "service_chime";
+
+export type PlatformNotificationSettings = {
+  operations_sound: NotificationSound;
+  customer_request_sound: NotificationSound;
+  updated_at?: string | null;
+};
+
+export function getPlatformNotificationSettings(options: BackendClientOptions = {}) {
+  return backendFetch<BaseResponse<PlatformNotificationSettings>>("/admin/platform/notification-settings", options);
+}
+
+export function updatePlatformNotificationSettings(
+  payload: Pick<PlatformNotificationSettings, "operations_sound" | "customer_request_sound">,
+  options: BackendClientOptions = {},
+) {
+  return backendRequest<BaseResponse<PlatformNotificationSettings>>("/admin/platform/notification-settings", {
+    ...options,
+    method: "PUT",
+    body: payload,
+  });
+}
+
 export type MenuImportPayload = {
   version: 1;
   categories: Array<{ name: string; type: "kitchen" | "bar" | "cafe" }>;

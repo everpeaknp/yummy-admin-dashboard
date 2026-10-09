@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Image from "next/image";
 import {
   BookOpenCheck,
   Film,
@@ -28,6 +29,7 @@ import {
   type TutorialVideoPayload,
 } from "@/lib/backend-api";
 import { canManageRestaurants, getStoredAuthSession } from "@/lib/auth";
+import { getTutorialVideoThumbnailUrl, getYouTubeThumbnailUrl } from "@/lib/tutorial-video-utils";
 
 type Tab = "guides" | "videos" | "support";
 
@@ -132,7 +134,7 @@ export default function HelpCenterAdminPage() {
 
   const saveVideo = () => {
     if (!videoDraft || !videoDraft.title.trim() || !videoDraft.youtube_url.trim()) {
-      setError("A tutorial needs a title and YouTube URL.");
+      setError("A tutorial needs a title and video URL.");
       return;
     }
     void run(async () => {
@@ -187,7 +189,7 @@ export default function HelpCenterAdminPage() {
             {data.guides.map((guide) => <ContentRow key={guide.id} title={guide.title} subtitle={`${guide.category} · ${guide.estimated_minutes ?? "—"} min`} published={guide.is_published} featured={guide.is_featured} onEdit={() => editGuide(guide)} onDelete={() => removeGuide(guide)} />)}
           </ContentList>
         ) : tab === "videos" ? (
-          <ContentList title="Video tutorials" description="YouTube links are rendered in the existing in-app player." onAdd={() => editVideo()} disabled={!canManage || busy}>
+          <ContentList title="Video tutorials" description="Add a YouTube link or a direct video URL. YouTube thumbnails are generated automatically; other video links can use a custom thumbnail." onAdd={() => editVideo()} disabled={!canManage || busy}>
             {data.videos.map((video) => <ContentRow key={video.id} title={video.title} subtitle={`${video.category} · ${video.duration_minutes ?? "—"} min`} published={video.is_published} featured={video.is_main} onEdit={() => editVideo(video)} onDelete={() => removeVideo(video)} />)}
           </ContentList>
         ) : <SupportEditor data={data} disabled={!canManage || busy} onChange={setData} onSave={() => void run(async () => {
@@ -219,8 +221,10 @@ export default function HelpCenterAdminPage() {
 
       {videoDraft && <Editor title={videoId == null ? "New video tutorial" : "Edit video tutorial"} onClose={() => setVideoDraft(null)} onSave={saveVideo} busy={busy} disabled={!canManage}>
         <Input label="Title" value={videoDraft.title} onChange={(title) => setVideoDraft({ ...videoDraft, title })} />
-        <Input label="YouTube URL" value={videoDraft.youtube_url} onChange={(youtube_url) => setVideoDraft({ ...videoDraft, youtube_url })} />
-        <Input label="Custom thumbnail URL (optional)" value={videoDraft.thumbnail_url ?? ""} onChange={(thumbnail_url) => setVideoDraft({ ...videoDraft, thumbnail_url })} />
+        <div className="grid gap-5 sm:grid-cols-2 sm:items-start">
+          <Input label="Video URL" type="url" placeholder="https://…" value={videoDraft.youtube_url} onChange={(youtube_url) => setVideoDraft({ ...videoDraft, youtube_url })} />
+          <VideoThumbnailEditor videoUrl={videoDraft.youtube_url} thumbnailUrl={videoDraft.thumbnail_url ?? ""} onThumbnailUrlChange={(thumbnail_url) => setVideoDraft({ ...videoDraft, thumbnail_url })} />
+        </div>
         <Input label="Description" multiline value={videoDraft.description ?? ""} onChange={(description) => setVideoDraft({ ...videoDraft, description })} />
         <div className="grid gap-4 sm:grid-cols-3"><Input label="Category" value={videoDraft.category} onChange={(category) => setVideoDraft({ ...videoDraft, category })} /><Input label="Duration (minutes)" type="number" value={String(videoDraft.duration_minutes ?? "")} onChange={(value) => setVideoDraft({ ...videoDraft, duration_minutes: value ? Number(value) : null })} /><Input label="Display order" type="number" value={String(videoDraft.sort_order)} onChange={(value) => setVideoDraft({ ...videoDraft, sort_order: Number(value) || 0 })} /></div>
         <Options published={videoDraft.is_published} featured={videoDraft.is_main} featuredLabel="Main dashboard video" onPublished={(is_published) => setVideoDraft({ ...videoDraft, is_published })} onFeatured={(is_main) => setVideoDraft({ ...videoDraft, is_main })} />
@@ -248,8 +252,26 @@ function ContentRow({ title, subtitle, published, featured, onEdit, onDelete }: 
   return <div className="flex items-center gap-4 p-4 sm:px-5"><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><h3 className="truncate font-semibold">{title}</h3>{featured && <span className="rounded-full bg-orange-50 px-2 py-0.5 text-xs font-semibold text-orange-700 dark:bg-orange-500/10 dark:text-orange-300">Featured</span>}<span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${published ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300" : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"}`}>{published ? "Published" : "Hidden"}</span></div><p className="mt-1 text-sm text-slate-500">{subtitle}</p></div><button onClick={onEdit} className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold dark:border-slate-700">Edit</button><button onClick={onDelete} aria-label={`Delete ${title}`} className="h-10 w-10 rounded-lg text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10"><Trash2 size={17} className="mx-auto" /></button></div>;
 }
 
-function Input({ label, value, onChange, type = "text", multiline = false }: { label: string; value: string; onChange: (value: string) => void; type?: string; multiline?: boolean }) {
-  return <label className="block"><span className="mb-2 block text-sm font-semibold">{label}</span>{multiline ? <textarea className={area} value={value} onChange={(event) => onChange(event.target.value)} /> : <input className={field} type={type} value={value} onChange={(event) => onChange(event.target.value)} />}</label>;
+function Input({ label, value, onChange, type = "text", multiline = false, placeholder }: { label: string; value: string; onChange: (value: string) => void; type?: string; multiline?: boolean; placeholder?: string }) {
+  return <label className="block"><span className="mb-2 block text-sm font-semibold">{label}</span>{multiline ? <textarea className={area} value={value} onChange={(event) => onChange(event.target.value)} /> : <input className={field} type={type} placeholder={placeholder} value={value} onChange={(event) => onChange(event.target.value)} />}</label>;
+}
+
+function VideoThumbnailEditor({ videoUrl, thumbnailUrl, onThumbnailUrlChange }: { videoUrl: string; thumbnailUrl: string; onThumbnailUrlChange: (value: string) => void }) {
+  const previewUrl = getTutorialVideoThumbnailUrl(videoUrl, thumbnailUrl);
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
+  const imageAvailable = Boolean(previewUrl) && failedUrl !== previewUrl;
+  const isAutomatic = Boolean(!thumbnailUrl.trim() && getYouTubeThumbnailUrl(videoUrl));
+
+  return <section className="space-y-3 rounded-xl border border-slate-200 p-4 dark:border-slate-700" aria-label="Video thumbnail">
+    <div className="flex items-start justify-between gap-3">
+      <div><h3 className="text-sm font-semibold">Thumbnail</h3><p className="mt-1 text-xs leading-5 text-slate-500">{isAutomatic ? "Preview generated from the YouTube link." : "Add an image URL to show a thumbnail for this video."}</p></div>
+      {previewUrl && imageAvailable && <span className="shrink-0 rounded-full bg-orange-50 px-2.5 py-1 text-xs font-semibold text-orange-700 dark:bg-orange-500/10 dark:text-orange-300">{isAutomatic ? "YouTube" : "Custom"}</span>}
+    </div>
+    <div className="relative aspect-video overflow-hidden rounded-lg border border-slate-200 bg-slate-100 dark:border-slate-700 dark:bg-slate-950">
+      {imageAvailable && previewUrl ? <Image src={previewUrl} alt="Video thumbnail preview" fill unoptimized sizes="(max-width: 640px) 100vw, 360px" className="object-cover" onError={() => setFailedUrl(previewUrl)} /> : <div className="flex h-full flex-col items-center justify-center gap-2 px-4 text-center text-slate-500"><Film size={25} /><p className="text-xs">{videoUrl.trim() ? "Thumbnail preview unavailable" : "Add a video link to preview its thumbnail"}</p></div>}
+    </div>
+    <Input label="Custom thumbnail image URL (optional)" type="url" placeholder="https://…/thumbnail.jpg" value={thumbnailUrl} onChange={(value) => { setFailedUrl(null); onThumbnailUrlChange(value); }} />
+  </section>;
 }
 
 function Options({ published, featured, featuredLabel, onPublished, onFeatured }: { published: boolean; featured: boolean; featuredLabel: string; onPublished: (value: boolean) => void; onFeatured: (value: boolean) => void }) {

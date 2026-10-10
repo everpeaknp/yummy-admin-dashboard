@@ -177,6 +177,17 @@ export default function RestaurantSubscriptionCard(props: Props) {
   );
   const activePlans = useMemo(() => plans.filter((plan) => plan.status === "active" && currentVersion(plan)), [plans]);
   const selectedPlan = activePlans.find((plan) => plan.id === selectedPlanId) || activePlans[0] || null;
+  const assignedPlanVersion = currentSubscription?.plan_version_number
+    ?? (typeof currentSubscription?.plan_version === "object" ? currentSubscription.plan_version?.version_number : null);
+  const selectedPlanVersion = selectedPlan ? currentVersion(selectedPlan) : null;
+  const selectedPlanIsNewer = Boolean(
+    currentSubscription
+    && selectedPlan
+    && currentSubscription.plan_code === selectedPlan.code
+    && assignedPlanVersion
+    && selectedPlanVersion
+    && selectedPlanVersion.version_number > assignedPlanVersion,
+  );
   const booleanDefinitions = definitions.filter((definition) => definition.value_type === "boolean" && definition.is_client_visible !== false);
 
   const applyPlan = async () => {
@@ -310,7 +321,7 @@ export default function RestaurantSubscriptionCard(props: Props) {
             <div className="flex items-start justify-between gap-3"><div><p className="text-lg font-bold text-slate-950">{currentSubscription?.plan_name || currentSubscription?.plan_code || "No plan assigned"}</p><p className="mt-1 text-sm text-slate-500">{currentSubscription?.effective_status || currentSubscription?.status || "Not active"}</p></div><Status value={currentSubscription?.effective_status || currentSubscription?.status || "unassigned"} /></div>
             <div className="mt-5 border-t border-slate-100 pt-4"><p className="text-2xl font-bold tracking-tight text-slate-900">{remainingLabel(currentSubscription)}</p><p className="mt-1 text-sm text-slate-500">{expiryLabel(currentSubscription)} {formatDate(expiryAt(currentSubscription))}</p></div>
           </div>
-          <div className="mt-5 space-y-3 text-sm"><SummaryRow label="Started" value={formatDate(currentSubscription?.current_period_start || currentSubscription?.started_at)} /><SummaryRow label="Plan version" value={currentSubscription ? `Version ${currentSubscription.plan_version_number || currentSubscription.plan_version_id}` : "—"} /><SummaryRow label="Feature exceptions" value={currentSubscription?.overrides?.length ? `${currentSubscription.overrides.length} active` : "None"} /></div>
+          <div className="mt-5 space-y-3 text-sm"><SummaryRow label="Started" value={formatDate(currentSubscription?.current_period_start || currentSubscription?.started_at)} /><SummaryRow label="Plan version" value={currentSubscription ? `Version ${assignedPlanVersion || currentSubscription.plan_version_id}` : "—"} /><SummaryRow label="Feature exceptions" value={currentSubscription?.overrides?.length ? `${currentSubscription.overrides.length} active` : "None"} /></div>
         </aside>
 
         <div className="p-6 sm:p-7">
@@ -322,6 +333,7 @@ export default function RestaurantSubscriptionCard(props: Props) {
               return <button key={plan.id} type="button" onClick={() => setSelectedPlanId(plan.id)} className={`rounded-2xl border p-4 text-left transition ${selected ? "border-orange-500 bg-orange-50 ring-1 ring-orange-500" : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"}`}><div className="flex items-center justify-between gap-3"><p className="font-bold text-slate-950">{plan.name}</p>{selected ? <span className="rounded-full bg-orange-500 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">Selected</span> : null}</div><p className="mt-2 min-h-10 text-xs leading-5 text-slate-500">{plan.description || "Configured restaurant access"}</p><p className="mt-3 text-xs font-semibold text-slate-600">Version {version?.version_number}</p></button>;
             })}
           </div>
+          {selectedPlanIsNewer ? <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-5 text-amber-900">This restaurant is on {selectedPlan?.name} version {assignedPlanVersion}. The current version is {selectedPlanVersion?.version_number}; applying it updates the assigned features and replaces the current access term.</p> : null}
           {!activePlans.length ? <p className="mt-4 rounded-xl border border-dashed border-slate-300 px-4 py-3 text-sm text-slate-500">There are no published plans to assign yet.</p> : null}
           <div className="mt-6 flex flex-col gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:flex-row sm:items-end sm:justify-between">
             <label className="block min-w-52"><span className="block text-sm font-semibold text-slate-800">Access term</span><select value={assignmentDuration} onChange={(event) => setAssignmentDuration(Number(event.target.value))} className="mt-2 h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-900 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100">{ASSIGNMENT_TERMS.map((months) => <option key={months} value={months}>{months} month{months === 1 ? "" : "s"}</option>)}</select></label>

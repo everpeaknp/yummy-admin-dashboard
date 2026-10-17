@@ -10,27 +10,32 @@ import {
   Search,
   Settings2,
   Sparkles,
+  TicketPercent,
 } from "lucide-react";
 
 import {
   adjustBillingSubscriptionPeriod,
   assignRestaurantPlanDirectly,
+  createBillingPromoCode,
   createBillingPlanVersion,
   createBillingSubscriptionOverride,
   deleteBillingSubscriptionOverride,
   getBillingEntitlementDefinitions,
+  getBillingPromoCodes,
   getBillingSubscriptions,
   getBillingUpgradeRequests,
   getPublicBillingCatalog,
   getPlatformRestaurantOptions,
   publishBillingPlanVersion,
   resolveBillingUpgradeRequest,
+  updateBillingPromoCode,
   updateBillingPlanVersionEntitlements,
   type BackendRestaurantOption,
   type BillingEntitlementDefinition,
   type BillingEntitlementValue,
   type BillingPlan,
   type BillingPlanVersion,
+  type BillingPromoCode,
   type BillingSubscription,
   type BillingUpgradeRequest,
 } from "@/lib/backend-api";
@@ -42,8 +47,9 @@ import {
   canViewBillingSubscriptions,
   getStoredAuthSession,
 } from "@/lib/auth";
+import PromoCodeManager from "@/components/PromoCodeManager";
 
-type DeskView = "restaurants" | "requests" | "history" | "plans";
+type DeskView = "restaurants" | "requests" | "history" | "plans" | "promos";
 const ASSIGNMENT_TERMS = [1, 3, 6, 12];
 
 const token = () => window.localStorage.getItem("accessToken") || undefined;
@@ -131,12 +137,15 @@ export default function SubscriptionDesk({ initialView = "restaurants" }: { init
   const canManagePlans = canManageBillingSubscriptions(session);
   const canManageOverrides = canManageBillingOverrides(session);
   const canEditCatalog = canManageBillingCatalog(session) && canPublishBillingCatalog(session);
+  const canManagePromos = canManageBillingCatalog(session);
   const [view, setView] = useState<DeskView>(initialView);
   const [restaurants, setRestaurants] = useState<BackendRestaurantOption[]>([]);
   const [subscriptions, setSubscriptions] = useState<BillingSubscription[]>([]);
   const [plans, setPlans] = useState<BillingPlan[]>([]);
   const [definitions, setDefinitions] = useState<BillingEntitlementDefinition[]>([]);
   const [requests, setRequests] = useState<BillingUpgradeRequest[]>([]);
+  const [promos, setPromos] = useState<BillingPromoCode[]>([]);
+  const [promoDraft, setPromoDraft] = useState({ code: "", description: "", discountType: "percentage" as "percentage" | "fixed", discountValue: 10, maxRedemptions: "", perAccountLimit: 1, planCode: "all", interval: "all", endsAt: "" });
   const [restaurantQuery, setRestaurantQuery] = useState("");
   const [planFilter, setPlanFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -154,6 +163,17 @@ export default function SubscriptionDesk({ initialView = "restaurants" }: { init
   const load = useCallback(async (targetView: DeskView) => {
     setLoading(true);
     setError(null);
+    if (targetView === "promos") {
+      try {
+        const response = await withDeadline(getBillingPromoCodes({ token: token() }), "Promo codes");
+        setPromos(response.data || []);
+      } catch (loadError) {
+        setError(messageFrom(loadError, "Could not load promo codes."));
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
     if (targetView === "history") {
       try {
         const response = await withDeadline(
@@ -338,6 +358,39 @@ export default function SubscriptionDesk({ initialView = "restaurants" }: { init
     finally { setBusy(null); }
   };
 
+  const createPromo = async () => {
+    if (!canManagePromos || promoDraft.discountValue <= 0) return;
+    setBusy("create-promo"); setError(null);
+    try {
+      const response = await createBillingPromoCode({
+        code: promoDraft.code.trim() || null,
+        description: promoDraft.description.trim() || null,
+        discount_type: promoDraft.discountType,
+        discount_value: promoDraft.discountValue,
+        applicable_plan_codes: promoDraft.planCode === "all" ? [] : [promoDraft.planCode],
+        billing_interval_months: promoDraft.interval === "all" ? [] : [Number(promoDraft.interval)],
+        ends_at: promoDraft.endsAt ? new Date(`${promoDraft.endsAt}T23:59:59`).toISOString() : null,
+        max_redemptions: promoDraft.maxRedemptions ? Number(promoDraft.maxRedemptions) : null,
+        per_account_limit: promoDraft.perAccountLimit,
+      }, { token: token() });
+      setNotice(`Promo ${response.data.code} is ready to use.`);
+      setPromoDraft((current) => ({ ...current, code: "", description: "" }));
+      await load("promos");
+    } catch (saveError) { setError(messageFrom(saveError, "Could not create the promo code.")); }
+    finally { setBusy(null); }
+  };
+
+  const togglePromo = async (promo: BillingPromoCode) => {
+    if (!canManagePromos) return;
+    setBusy(`promo-${promo.id}`); setError(null);
+    try {
+      await updateBillingPromoCode(promo.id, { is_active: !promo.is_active }, { token: token() });
+      setNotice(`${promo.code} is now ${promo.is_active ? "disabled" : "active"}.`);
+      await load("promos");
+    } catch (saveError) { setError(messageFrom(saveError, "Could not update the promo code.")); }
+    finally { setBusy(null); }
+  };
+
   if (!canView) return <AccessDenied />;
 
   return (
@@ -348,8 +401,8 @@ export default function SubscriptionDesk({ initialView = "restaurants" }: { init
           <button type="button" onClick={() => void load(view)} className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold hover:bg-slate-100">Refresh</button>
         </header>
 
-        <nav className="mt-6 inline-flex rounded-xl border border-slate-200 bg-white p-1" aria-label="Subscription desk">
-          {([ ["restaurants", "Restaurants", Crown], ["requests", `Requests${pendingRequests.length ? ` (${pendingRequests.length})` : ""}`, ClipboardCheck], ["history", "History", ClipboardCheck], ["plans", "Plan features", Settings2] ] as const).map(([nextView, name, Icon]) => <button key={nextView} type="button" onClick={() => setView(nextView)} className={`inline-flex min-h-10 items-center gap-2 rounded-lg px-3 text-sm font-semibold transition-colors ${view === nextView ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"}`}><Icon className="h-4 w-4" />{name}</button>)}
+        <nav className="mt-6 flex w-fit max-w-full flex-wrap rounded-xl border border-slate-200 bg-white p-1" aria-label="Subscription desk">
+          {([ ["restaurants", "Restaurants", Crown], ["requests", `Requests${pendingRequests.length ? ` (${pendingRequests.length})` : ""}`, ClipboardCheck], ["history", "History", ClipboardCheck], ["plans", "Plan features", Settings2], ["promos", "Promo codes", TicketPercent] ] as const).map(([nextView, name, Icon]) => <button key={nextView} type="button" onClick={() => setView(nextView)} className={`inline-flex min-h-10 items-center gap-2 rounded-lg px-3 text-sm font-semibold transition-colors ${view === nextView ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"}`}><Icon className="h-4 w-4" />{name}</button>)}
         </nav>
 
         {error ? <Notice tone="error">{error}</Notice> : null}
@@ -368,6 +421,7 @@ export default function SubscriptionDesk({ initialView = "restaurants" }: { init
         {!loading && view === "history" ? <section className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"><div className="border-b border-slate-200 px-5 py-5 sm:px-6"><h2 className="text-xl font-semibold">Plan assignment history</h2><p className="mt-1 text-sm text-slate-500">Every plan assignment is retained, including replaced and expired terms.</p></div><div className="divide-y">{subscriptions.length ? subscriptions.map((subscription) => <article key={subscription.id} className="grid gap-2 px-5 py-4 sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_auto] sm:items-center sm:px-6"><div><p className="font-semibold">{subscription.restaurant_names?.join(", ") || subscriptionRestaurantIds(subscription).map(requestRestaurantName).join(", ") || subscription.billing_account_name || "Restaurant"}</p><p className="mt-1 text-sm text-slate-500">{subscription.plan_name || subscription.plan_code || "Plan"} · {subscription.status}</p></div><p className="text-sm text-slate-600">{subscription.current_period_start ? new Date(subscription.current_period_start).toLocaleDateString() : "Started"} – {subscription.current_period_end ? new Date(subscription.current_period_end).toLocaleDateString() : "No expiry"}</p><span className={`w-fit rounded-full px-3 py-1 text-xs font-semibold ${daysRemaining(subscription) !== null && daysRemaining(subscription)! < 0 ? "bg-red-50 text-red-700" : "bg-slate-100 text-slate-700"}`}>{remainingLabel(subscription)}</span></article>) : <Empty text="No plan assignments have been recorded." />}</div></section> : null}
 
         {!loading && view === "plans" ? <section className="mt-6 grid gap-6 lg:grid-cols-[18rem_minmax(0,1fr)]"><div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm"><p className="px-2 pb-2 pt-1 text-sm font-semibold">Plans</p>{activePlans.map((plan) => <button key={plan.id} type="button" onClick={() => setFeaturePlanId(plan.id)} className={`w-full rounded-xl px-3 py-3 text-left ${featurePlanId === plan.id ? "bg-orange-50 text-orange-900" : "hover:bg-slate-50"}`}><p className="text-sm font-semibold">{plan.name}</p><p className="mt-1 text-xs text-slate-500">{plan.description || "Plan feature set"}</p></button>)}</div><div className="rounded-2xl border border-slate-200 bg-white shadow-sm">{selectedFeaturePlan && selectedFeatureVersion ? <><div className="border-b border-slate-200 px-5 py-5 sm:px-6"><h2 className="text-xl font-semibold">{selectedFeaturePlan.name} features</h2><p className="mt-1 text-sm text-slate-500">Turn features on or off for this plan. Saving creates and publishes a new version automatically, so existing subscriptions keep their recorded history.</p></div><div className="grid divide-y sm:grid-cols-2 sm:divide-x sm:divide-y-0">{definitions.filter((definition) => definition.is_client_visible !== false).map((definition) => <PlanFeatureField key={definition.key} definition={definition} value={featureDraft[definition.key]} onChange={(value) => setFeatureDraft((current) => ({ ...current, [definition.key]: value }))} />)}</div><div className="border-t border-slate-200 px-5 py-4 sm:px-6"><button type="button" disabled={!canEditCatalog || busy === "save-plan-features"} onClick={() => void savePlanFeatures()} className="inline-flex h-11 items-center rounded-xl bg-slate-900 px-5 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50">{busy === "save-plan-features" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}Save plan features</button>{!canEditCatalog ? <p className="mt-2 text-xs text-slate-500">You need catalog and publish permission to change plan features.</p> : null}</div></> : <Empty text="No published plan version is available." />}</div></section> : null}
+        {!loading && view === "promos" ? <PromoCodeManager promos={promos} plans={activePlans} draft={promoDraft} setDraft={setPromoDraft} canManage={canManagePromos} busy={busy} onCreate={createPromo} onToggle={togglePromo} /> : null}
       </div>
     </main>
   );

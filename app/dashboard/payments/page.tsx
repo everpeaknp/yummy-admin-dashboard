@@ -150,6 +150,20 @@ function contractSubtotal(subscription: BillingSubscription | undefined) {
   return total;
 }
 
+function invoiceSourceLabel(invoice: BillingInvoice) {
+  if (invoice.source !== "self_service") return invoice.source || "manual";
+  if (invoice.status === "paid") return "Self-service purchase";
+  if (invoice.checkout_status === "review_required") return "Late payment needs review";
+  if (invoice.checkout_status === "superseded") return "Superseded checkout";
+  if (["canceled", "void"].includes(invoice.status)) return "Abandoned checkout";
+  return "Checkout awaiting payment";
+}
+
+function invoicePlanLabel(invoice: BillingInvoice) {
+  const name = invoice.line_items?.[0]?.name;
+  return typeof name === "string" && name.trim() ? name : null;
+}
+
 function downloadCsv(
   invoices: BillingInvoice[],
   subscriptions: BillingSubscription[],
@@ -674,13 +688,15 @@ export default function PaymentsPage() {
                           {invoice.invoice_number || `#${invoice.id}`}
                         </p>
                         <p className="mt-1 text-xs text-slate-500">
-                          {invoice.source || "manual"} ·{" "}
+                          {invoiceSourceLabel(invoice)} ·{" "}
                           {displayDate(invoice.created_at)}
                         </p>
                         {invoice.line_items?.length ? (
                           <details className="mt-2 text-xs">
                             <summary className="cursor-pointer text-orange-600">
-                              {invoice.line_items.length} line item(s)
+                              {invoicePlanLabel(invoice)
+                                ? `View ${invoicePlanLabel(invoice)}`
+                                : `${invoice.line_items.length} line item(s)`}
                             </summary>
                             <pre className="mt-2 max-w-sm overflow-auto rounded bg-slate-900 p-2 text-[10px] text-white">
                               {JSON.stringify(invoice.line_items, null, 2)}

@@ -1396,6 +1396,7 @@ export type BillingInvoice = {
   stored_status?: string;
   line_items?: Array<Record<string, unknown>>;
   source?: "manual" | "contract" | "upgrade" | "renewal" | string;
+  checkout_status?: "pending" | "paid" | "failed" | "expired" | "superseded" | "review_required" | string | null;
   voided_at?: string | null;
   void_reason?: string | null;
   payments?: BillingPayment[];
@@ -1460,6 +1461,36 @@ export type BillingUpgradeRequest = {
   invoice_id?: number | null;
   completed_at?: string | null;
   created_at: string;
+};
+
+export type BillingPromoCode = {
+  id: number;
+  code: string;
+  description?: string | null;
+  discount_type: "percentage" | "fixed";
+  discount_value: number | string;
+  applicable_plan_codes: string[];
+  billing_interval_months: number[];
+  starts_at?: string | null;
+  ends_at?: string | null;
+  max_redemptions?: number | null;
+  per_account_limit: number;
+  is_active: boolean;
+  redeemed_count: number;
+  created_at?: string | null;
+};
+
+export type BillingPromoCodeCreatePayload = {
+  code?: string | null;
+  description?: string | null;
+  discount_type: "percentage" | "fixed";
+  discount_value: number;
+  applicable_plan_codes?: string[];
+  billing_interval_months?: number[];
+  ends_at?: string | null;
+  max_redemptions?: number | null;
+  per_account_limit?: number;
+  is_active?: boolean;
 };
 
 export type BillingAuditLog = {
@@ -1900,6 +1931,36 @@ export async function reviewBillingUpgradeRequest(
 ): Promise<BaseResponse<Pick<BillingUpgradeRequest, "id" | "status" | "reviewed_by" | "reviewed_at">>> {
   return backendRequest<BaseResponse<Pick<BillingUpgradeRequest, "id" | "status" | "reviewed_by" | "reviewed_at">>>(
     `${PLATFORM_BILLING_PATH}/upgrade-requests/${requestId}`,
+    { ...options, method: "PATCH", body: payload },
+  );
+}
+
+export async function getBillingPromoCodes(
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<BillingPromoCode[]>> {
+  return backendFetch<BaseResponse<BillingPromoCode[]>>(
+    `${PLATFORM_BILLING_PATH}/promo-codes`,
+    options,
+  );
+}
+
+export async function createBillingPromoCode(
+  payload: BillingPromoCodeCreatePayload,
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<BillingPromoCode>> {
+  return backendRequest<BaseResponse<BillingPromoCode>>(
+    `${PLATFORM_BILLING_PATH}/promo-codes`,
+    { ...options, method: "POST", body: payload },
+  );
+}
+
+export async function updateBillingPromoCode(
+  promoId: number,
+  payload: { is_active?: boolean; ends_at?: string | null; max_redemptions?: number | null; description?: string | null },
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<BillingPromoCode>> {
+  return backendRequest<BaseResponse<BillingPromoCode>>(
+    `${PLATFORM_BILLING_PATH}/promo-codes/${promoId}`,
     { ...options, method: "PATCH", body: payload },
   );
 }

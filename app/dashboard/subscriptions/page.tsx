@@ -1492,7 +1492,7 @@ function LegacySubscriptionsPage() {
                       </Td>
                       <Td>
                         <p className="font-semibold text-slate-800">
-                          {request.requested_plan_code}
+                          {request.message?.startsWith("ADD-ON QUOTE ONLY:") ? "Add-on quote enquiry" : request.requested_plan_code}
                         </p>
                         <p className="text-xs text-slate-500">
                           {request.billing_interval_months
@@ -1595,7 +1595,9 @@ function LegacySubscriptionsPage() {
                   </div>
                 </div>
               </div>
-              {selectedUpgradeRequest.status === "approved" ? (
+              {selectedUpgradeRequest.message?.startsWith("ADD-ON QUOTE ONLY:") ? (
+                <p className="border-t border-orange-200 pt-3 text-sm text-orange-800">Quote enquiry only. Contact this restaurant directly to discuss pricing and requirements. This request does not change their plan.</p>
+              ) : selectedUpgradeRequest.status === "approved" ? (
                 <div className="border-t border-orange-200 pt-4">
                   <p className="text-xs font-bold uppercase tracking-wider text-orange-700">
                     Step 2 · Price, invoice, and activate

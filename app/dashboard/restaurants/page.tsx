@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { Fingerprint, MapPin, Pencil, Phone, Search, Utensils } from "lucide-react";
-import { getRestaurants, type BackendRestaurant } from "@/lib/backend-api";
+import { getPlatformRestaurantOptions, type BackendRestaurantOption } from "@/lib/backend-api";
 import { canManageRestaurants, getStoredAuthSession } from "@/lib/auth";
 import RestaurantAvatar from "@/components/RestaurantAvatar";
 
@@ -23,7 +23,7 @@ function formatExpiryDate(value?: string | null): string {
   }).format(parsed);
 }
 
-function getExpiryDateObj(restaurant: BackendRestaurant): Date | null {
+function getExpiryDateObj(restaurant: BackendRestaurantOption): Date | null {
   const planState = (restaurant.plan_state || "").toLowerCase();
   const billingMode = (restaurant.billing_mode || "").toLowerCase();
   if (billingMode === "free") return null;
@@ -40,7 +40,7 @@ function getExpiryDateObj(restaurant: BackendRestaurant): Date | null {
   return d;
 }
 
-function getExpiryCellData(restaurant: BackendRestaurant): { label: string; value: string; isExpiringSoon: boolean; isExpired: boolean } {
+function getExpiryCellData(restaurant: BackendRestaurantOption): { label: string; value: string; isExpiringSoon: boolean; isExpired: boolean } {
   const planState = (restaurant.plan_state || "").toLowerCase();
   const billingMode = (restaurant.billing_mode || "").toLowerCase();
   const isTrialPlan = planState.includes("trial") || billingMode === "trial_paid";
@@ -93,7 +93,7 @@ function getExpiryCellData(restaurant: BackendRestaurant): { label: string; valu
 }
 
 export default function RestaurantsPage() {
-  const [restaurantsList, setRestaurantsList] = useState<BackendRestaurant[]>([]);
+  const [restaurantsList, setRestaurantsList] = useState<BackendRestaurantOption[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState("all");
@@ -107,7 +107,7 @@ export default function RestaurantsPage() {
     async function loadRestaurants() {
       try {
         const token = window.localStorage.getItem("accessToken") || undefined;
-        const response = await getRestaurants({ token });
+        const response = await getPlatformRestaurantOptions({ token });
         if (!isMounted) {
           return;
         }

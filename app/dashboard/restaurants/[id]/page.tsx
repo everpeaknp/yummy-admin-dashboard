@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Card from "@/components/Card";
 import RestaurantAvatar from "@/components/RestaurantAvatar";
@@ -42,6 +42,14 @@ type AttendanceFormState = {
   attendance_trial_ends_at: string;
   attendance_ends_at: string;
 };
+
+type OperationalFlagKey =
+  | "restaurant_enabled"
+  | "hotel_enabled"
+  | "finance_reports_enabled"
+  | "finance_accounting_enabled"
+  | "kot_enabled"
+  | "tax_enabled";
 
 const emptyForm: RestaurantFormState = {
   name: "",
@@ -179,25 +187,6 @@ export default function RestaurantDetailPage() {
     };
   }, [restaurantId]);
 
-  const serviceSummary = useMemo(
-    () => [
-      { label: "Restaurant", enabled: form.restaurant_enabled, color: "green" },
-      { label: "Hotel", enabled: form.hotel_enabled, color: "blue" },
-      { label: "Finance Reports", enabled: form.finance_reports_enabled, color: "violet" },
-      { label: "Finance Accounting", enabled: form.finance_accounting_enabled, color: "amber" },
-      { label: "KOT", enabled: form.kot_enabled, color: "orange" },
-      { label: "Tax", enabled: form.tax_enabled, color: "teal" },
-    ],
-    [
-      form.finance_accounting_enabled,
-      form.finance_reports_enabled,
-      form.hotel_enabled,
-      form.kot_enabled,
-      form.restaurant_enabled,
-      form.tax_enabled,
-    ],
-  );
-
   const saveChanges = async () => {
     if (!restaurant) {
       return;
@@ -215,12 +204,6 @@ export default function RestaurantDetailPage() {
       pan_number: form.pan_number,
       timezone: form.timezone,
       local_pos_ip: form.local_pos_ip,
-      restaurant_enabled: form.restaurant_enabled,
-      hotel_enabled: form.hotel_enabled,
-      finance_reports_enabled: form.finance_reports_enabled,
-      finance_accounting_enabled: form.finance_accounting_enabled,
-      kot_enabled: form.kot_enabled,
-      tax_enabled: form.tax_enabled,
     };
 
     if (billingV2Available === false) {
@@ -244,6 +227,36 @@ export default function RestaurantDetailPage() {
       setSuccess("Restaurant details saved successfully.");
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "Failed to save restaurant details");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const saveOperationalChanges = async () => {
+    if (!restaurant) return;
+    if (!canManageRestaurants(getStoredAuthSession())) {
+      setError("You do not have permission to manage operational availability.");
+      return;
+    }
+
+    setIsSaving(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const token = window.localStorage.getItem("accessToken") || undefined;
+      const response = await updateRestaurant(restaurant.id, {
+        restaurant_enabled: form.restaurant_enabled,
+        hotel_enabled: form.hotel_enabled,
+        finance_reports_enabled: form.finance_reports_enabled,
+        finance_accounting_enabled: form.finance_accounting_enabled,
+        kot_enabled: form.kot_enabled,
+        tax_enabled: form.tax_enabled,
+      }, { token });
+      setRestaurant(response.data);
+      setForm(toFormState(response.data));
+      setSuccess("Operational availability saved.");
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : "Failed to save operational availability.");
     } finally {
       setIsSaving(false);
     }
@@ -382,13 +395,19 @@ export default function RestaurantDetailPage() {
                 </>
               );
             })()}
-            <span className={`rounded-full px-3 py-1 ${restaurant.restaurant_enabled ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>Restaurant</span>
-            <span className={`rounded-full px-3 py-1 ${restaurant.hotel_enabled ? "bg-blue-100 text-blue-700" : "bg-slate-100 text-slate-500"}`}>Hotel</span>
-            <span className={`rounded-full px-3 py-1 ${restaurant.attendance_enabled ? "bg-purple-100 text-purple-700" : "bg-slate-100 text-slate-500"}`}>Attendance</span>
           </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
+          {canManageRestaurants(getStoredAuthSession()) && (
+            <Link
+              href={`/dashboard/restaurants/${restaurant.id}/menu-import`}
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
+            >
+              <span className="material-icons-round text-[18px]">upload_file</span>
+              Import menu
+            </Link>
+          )}
           {canManageRestaurants(getStoredAuthSession()) && (
             <Link
               href={`/dashboard/restaurants/${restaurant.id}/compliance`}
@@ -406,18 +425,18 @@ export default function RestaurantDetailPage() {
               className="inline-flex items-center gap-2 rounded-xl bg-orange-500 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <span className="material-icons-round text-[18px]">save</span>
-              {isSaving ? "Saving..." : "Save Changes"}
+              {isSaving ? "Saving…" : "Save Changes"}
             </button>
           )}
         </div>
       </div>
 
-      {error ? <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
-      {success ? <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">{success}</div> : null}
+      {error ? <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
+      {success ? <div aria-live="polite" className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">{success}</div> : null}
 
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
         <Card className="p-6 xl:col-span-2">
-          <h2 className="text-lg font-bold text-slate-900">Restaurant Details</h2>
+          <h2 className="text-lg font-bold text-slate-900">Restaurant details</h2>
           <p className="mt-1 text-sm text-slate-500">Edit the core profile data shown throughout the dashboard.</p>
 
           <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -429,6 +448,11 @@ export default function RestaurantDetailPage() {
             <Field label="Local POS IP" value={form.local_pos_ip} onChange={(value) => setForm((prev) => ({ ...prev, local_pos_ip: value }))} />
             <Field label="Description" value={form.description} onChange={(value) => setForm((prev) => ({ ...prev, description: value }))} className="md:col-span-2" textarea />
           </div>
+        </Card>
+
+        <Card className="border-dashed bg-slate-50 p-6">
+          <h2 className="text-lg font-bold text-slate-900">Access is managed by the plan</h2>
+          <p className="mt-2 text-sm leading-6 text-slate-600">Plan features and restaurant exceptions appear below. Operational pauses are kept separate so they cannot be mistaken for the restaurant&apos;s subscription.</p>
         </Card>
 
         <RestaurantSubscriptionCard
@@ -444,39 +468,13 @@ export default function RestaurantDetailPage() {
           onV2AvailabilityChange={setBillingV2Available}
         />
 
-        <Card className="p-6">
-          <h2 className="text-lg font-bold text-slate-900">Service Flags</h2>
-          <p className="mt-1 text-sm text-slate-500">Enable or disable modules from one place.</p>
-
-          <div className="mt-5 space-y-3">
-            {serviceSummary.map((item) => (
-              <ToggleRow
-                key={item.label}
-                label={item.label}
-                enabled={item.enabled}
-                onToggle={() => {
-                  if (!canManageRestaurants(getStoredAuthSession())) {
-                    setError("You do not have permission to manage service flags.");
-                    return;
-                  }
-                  setForm((prev) => ({ ...prev, [toggleKeyForLabel(item.label)]: !prev[toggleKeyForLabel(item.label)] }))
-                }}
-              />
-            ))}
-          </div>
-
-          <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
-            <h3 className="text-sm font-semibold text-slate-900">Current state</h3>
-            <div className="mt-3 flex flex-wrap gap-2 text-[11px] font-semibold uppercase tracking-wider">
-              <span className={`rounded-full px-3 py-1 ${form.restaurant_enabled ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>Restaurant</span>
-              <span className={`rounded-full px-3 py-1 ${form.hotel_enabled ? "bg-blue-100 text-blue-700" : "bg-slate-100 text-slate-500"}`}>Hotel</span>
-              <span className={`rounded-full px-3 py-1 ${form.finance_reports_enabled ? "bg-violet-100 text-violet-700" : "bg-slate-100 text-slate-500"}`}>Finance Reports</span>
-              <span className={`rounded-full px-3 py-1 ${form.finance_accounting_enabled ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-500"}`}>Finance Accounting</span>
-              <span className={`rounded-full px-3 py-1 ${form.kot_enabled ? "bg-orange-100 text-orange-700" : "bg-slate-100 text-slate-500"}`}>KOT</span>
-              <span className={`rounded-full px-3 py-1 ${form.tax_enabled ? "bg-teal-100 text-teal-700" : "bg-slate-100 text-slate-500"}`}>Tax</span>
-            </div>
-          </div>
-        </Card>
+        <OperationalAvailabilityCard
+          values={form}
+          canManage={canManageRestaurants(getStoredAuthSession())}
+          saving={isSaving}
+          onToggle={(key) => setForm((prev) => ({ ...prev, [key]: !prev[key] }))}
+          onSave={() => void saveOperationalChanges()}
+        />
 
         {billingV2Available === false ? <Card className="p-6">
           <div className="flex items-start justify-between gap-4">
@@ -549,9 +547,9 @@ export default function RestaurantDetailPage() {
         </Card> : null}
       </div>
 
-      <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
-        <Card className="p-6 xl:col-span-2">
-          <h2 className="text-lg font-bold text-slate-900">Read Only Details</h2>
+      <div className="grid grid-cols-1 gap-5">
+        <Card className="p-6">
+          <h2 className="text-lg font-bold text-slate-900">Restaurant record</h2>
           <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2">
             <InfoBlock label="ID" value={restaurant.id} />
             <InfoBlock label="Registered By" value={restaurant.registered_by} />
@@ -561,19 +559,6 @@ export default function RestaurantDetailPage() {
             <InfoBlock label="Paid Ends" value={restaurant.paid_ends_at ? new Date(restaurant.paid_ends_at).toLocaleString() : "-"} />
             <InfoBlock label="Attendance Trial Ends" value={restaurant.attendance_trial_ends_at ? new Date(restaurant.attendance_trial_ends_at).toLocaleString() : "-"} />
             <InfoBlock label="Attendance Ends" value={restaurant.attendance_ends_at ? new Date(restaurant.attendance_ends_at).toLocaleString() : "-"} />
-          </div>
-        </Card>
-
-        <Card className="p-6">
-          <h2 className="text-lg font-bold text-slate-900">Checklist</h2>
-          <div className="mt-4 space-y-3 text-sm text-slate-600">
-            <p>{form.restaurant_enabled ? "Restaurant module is active." : "Restaurant module is disabled."}</p>
-            <p>{form.hotel_enabled ? "Hotel module is active." : "Hotel module is disabled."}</p>
-            <p>{form.finance_reports_enabled ? "Finance reports are active." : "Finance reports are disabled."}</p>
-            <p>{form.finance_accounting_enabled ? "Finance accounting is active." : "Finance accounting is disabled."}</p>
-            <p>{form.kot_enabled ? "KOT is active." : "KOT is disabled."}</p>
-            <p>{form.tax_enabled ? "Tax is active." : "Tax is disabled."}</p>
-            <p>{attendanceForm.attendance_enabled ? "Attendance add-on is active." : "Attendance add-on is disabled."}</p>
           </div>
         </Card>
       </div>
@@ -616,6 +601,54 @@ function Field({
   );
 }
 
+function OperationalAvailabilityCard({
+  values,
+  canManage,
+  saving,
+  onToggle,
+  onSave,
+}: {
+  values: Pick<RestaurantFormState, OperationalFlagKey>;
+  canManage: boolean;
+  saving: boolean;
+  onToggle: (key: OperationalFlagKey) => void;
+  onSave: () => void;
+}) {
+  const controls: Array<{ key: OperationalFlagKey; label: string; description: string }> = [
+    { key: "restaurant_enabled", label: "Restaurant workspace", description: "Pause the main restaurant workspace for this outlet." },
+    { key: "hotel_enabled", label: "Hotel module", description: "Keep Hotel unavailable until the property is ready to operate it." },
+    { key: "finance_reports_enabled", label: "Finance reports", description: "Pause legacy finance reporting access for this outlet." },
+    { key: "finance_accounting_enabled", label: "Finance accounting", description: "Pause the legacy accounting module where it still applies." },
+    { key: "kot_enabled", label: "Kitchen KOT", description: "Pause kitchen ticket generation while the kitchen is not operating." },
+    { key: "tax_enabled", label: "Tax", description: "Pause tax handling for this outlet." },
+  ];
+  const paused = controls.filter((control) => !values[control.key]).length;
+
+  return (
+    <Card className="overflow-hidden xl:col-span-3">
+      <details>
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-6 py-5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-orange-500 sm:px-7">
+          <div>
+            <h2 className="text-lg font-bold text-slate-900">Operational availability</h2>
+            <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">Use only to pause a module for setup, maintenance, or an emergency. This does not change the restaurant&apos;s plan.</p>
+          </div>
+          <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${paused ? "bg-amber-50 text-amber-800" : "bg-emerald-50 text-emerald-700"}`}>{paused ? `${paused} paused` : "No pauses"}</span>
+        </summary>
+        <div className="border-t border-slate-200 px-6 py-5 sm:px-7">
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">A plan can include a feature while this operational control keeps it unavailable. Use plan exceptions above for commercial access; use these switches only for a temporary operational pause.</div>
+          <div className="mt-4 grid gap-3 lg:grid-cols-2">
+            {controls.map((control) => <ToggleRow key={control.key} label={control.label} description={control.description} enabled={values[control.key]} disabled={!canManage || saving} onToggle={() => onToggle(control.key)} />)}
+          </div>
+          <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-5">
+            <p className="text-xs leading-5 text-slate-500">Operational changes save separately from restaurant profile details.</p>
+            {canManage ? <button type="button" onClick={onSave} disabled={saving} className="inline-flex h-10 items-center rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60">{saving ? "Saving availability…" : "Save operational changes"}</button> : <p className="text-xs text-slate-500">You do not have permission to change availability.</p>}
+          </div>
+        </div>
+      </details>
+    </Card>
+  );
+}
+
 function DateTimeField({
   label,
   value,
@@ -643,23 +676,31 @@ function DateTimeField({
 
 function ToggleRow({
   label,
+  description,
   enabled,
+  disabled = false,
   onToggle,
 }: {
   label: string;
+  description?: string;
   enabled: boolean;
+  disabled?: boolean;
   onToggle: () => void;
 }) {
   return (
     <div className="flex items-center justify-between rounded-xl border border-slate-200 px-4 py-3">
       <div>
         <p className="text-sm font-semibold text-slate-900">{label}</p>
-        <p className="text-xs text-slate-500">{enabled ? "Enabled for this restaurant" : "Disabled for this restaurant"}</p>
+        <p className="mt-1 text-xs leading-5 text-slate-500">{description || (enabled ? "Available for this restaurant" : "Paused for this restaurant")}</p>
       </div>
       <button
         type="button"
+        role="switch"
+        aria-checked={enabled}
+        aria-label={`${enabled ? "Pause" : "Make available"} ${label}`}
         onClick={onToggle}
-        className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${enabled ? "bg-orange-500" : "bg-slate-300"}`}
+        disabled={disabled}
+        className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${enabled ? "bg-orange-500" : "bg-slate-300"}`}
       >
         <span
           className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${enabled ? "translate-x-6" : "translate-x-1"}`}
@@ -676,13 +717,4 @@ function InfoBlock({ label, value }: { label: string; value: string | number }) 
       <p className="mt-2 text-sm font-semibold text-slate-900">{value}</p>
     </div>
   );
-}
-
-function toggleKeyForLabel(label: string): keyof RestaurantFormState {
-  if (label === "Restaurant") return "restaurant_enabled";
-  if (label === "Hotel") return "hotel_enabled";
-  if (label === "Finance Reports") return "finance_reports_enabled";
-  if (label === "Finance Accounting") return "finance_accounting_enabled";
-  if (label === "KOT") return "kot_enabled";
-  return "tax_enabled";
 }

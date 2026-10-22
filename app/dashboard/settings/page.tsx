@@ -11,6 +11,7 @@ import {
   deleteUser,
   getBuiltInRoles,
   getPermissionsCatalog,
+  getPlatformNotificationSettings,
   getRedisHealth,
   getRestaurantAdmins,
   getRestaurants,
@@ -18,12 +19,15 @@ import {
   getUsers,
   removeRestaurantAdmin,
   updateRole,
+  updatePlatformNotificationSettings,
   updateUser,
   updateUserPermissions,
   type AdminInvitePayload,
   type BackendRestaurant,
   type BackendUser,
   type PermissionRead,
+  type NotificationSound,
+  type PlatformNotificationSettings,
   type RestaurantAdminItem,
   type RoleRead,
   type RoleCreatePayload,
@@ -71,6 +75,11 @@ const EMPTY_ADMIN_FORM: AdminInvitePayload = {
   name: "",
   email: "",
   password: "",
+};
+
+const DEFAULT_NOTIFICATION_SETTINGS: PlatformNotificationSettings = {
+  operations_sound: "kitchen_bell",
+  customer_request_sound: "service_chime",
 };
 
 function titleCase(value: string) {
@@ -149,6 +158,11 @@ export default function SettingsPage() {
   const [selectedRestaurantId, setSelectedRestaurantId] = useState<number | null>(null);
   const [adminForm, setAdminForm] = useState<AdminInvitePayload>(EMPTY_ADMIN_FORM);
   const [adminFormMessage, setAdminFormMessage] = useState<string | null>(null);
+  const [notificationSettings, setNotificationSettings] = useState(DEFAULT_NOTIFICATION_SETTINGS);
+  const [notificationSettingsLoading, setNotificationSettingsLoading] = useState(false);
+  const [notificationSettingsSaving, setNotificationSettingsSaving] = useState(false);
+  const [notificationSettingsMessage, setNotificationSettingsMessage] = useState<string | null>(null);
+  const [notificationSettingsError, setNotificationSettingsError] = useState<string | null>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -297,6 +311,49 @@ export default function SettingsPage() {
     }
     loadRestaurantAdmins(selectedRestaurantId);
   }, [activeTab, selectedRestaurantId]);
+
+  useEffect(() => {
+    if (activeTab !== "settings" || !token) {
+      return;
+    }
+    let alive = true;
+    setNotificationSettingsLoading(true);
+    getPlatformNotificationSettings({ token })
+      .then((response) => {
+        if (!alive) return;
+        setNotificationSettings(response.data);
+        setNotificationSettingsError(null);
+      })
+      .catch((error) => {
+        if (!alive) return;
+        setNotificationSettingsError(error instanceof Error ? error.message : "Failed to load notification settings.");
+      })
+      .finally(() => {
+        if (alive) setNotificationSettingsLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [activeTab, token]);
+
+  const handleSaveNotificationSettings = async () => {
+    if (!token) return;
+    setNotificationSettingsSaving(true);
+    setNotificationSettingsMessage(null);
+    setNotificationSettingsError(null);
+    try {
+      const response = await updatePlatformNotificationSettings({
+        operations_sound: notificationSettings.operations_sound,
+        customer_request_sound: notificationSettings.customer_request_sound,
+      }, { token });
+      setNotificationSettings(response.data);
+      setNotificationSettingsMessage("Notification sounds updated for all restaurants.");
+    } catch (error) {
+      setNotificationSettingsError(error instanceof Error ? error.message : "Failed to update notification settings.");
+    } finally {
+      setNotificationSettingsSaving(false);
+    }
+  };
 
   const builtInRoleOptions = useMemo(() => {
     const keys = Object.keys(builtInRoles);
@@ -1240,6 +1297,22 @@ export default function SettingsPage() {
         {activeTab === "settings" ? (
           <div className="space-y-6">
             <Card className="p-6">
+              <h2 className="text-wrap-balance text-lg font-bold text-slate-900 dark:text-white">Notification sounds</h2>
+              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">These choices apply to every restaurant and all future push notifications.</p>
+              {notificationSettingsError ? <p role="alert" className="mt-4 text-sm font-medium text-red-600 dark:text-red-400">{notificationSettingsError}</p> : null}
+              {notificationSettingsMessage ? <p role="status" className="mt-4 text-sm font-medium text-emerald-700 dark:text-emerald-400">{notificationSettingsMessage}</p> : null}
+              <fieldset disabled={notificationSettingsLoading || notificationSettingsSaving} className="mt-5 grid gap-4 md:grid-cols-2 disabled:opacity-60">
+                <SoundSelect label="Operational alerts" value={notificationSettings.operations_sound} onChange={(operations_sound) => setNotificationSettings((current) => ({ ...current, operations_sound }))} />
+                <SoundSelect label="Customer requests" value={notificationSettings.customer_request_sound} onChange={(customer_request_sound) => setNotificationSettings((current) => ({ ...current, customer_request_sound }))} />
+              </fieldset>
+              <div className="mt-5 flex justify-end border-t border-slate-100 pt-5 dark:border-slate-800">
+                <button type="button" onClick={() => void handleSaveNotificationSettings()} disabled={notificationSettingsLoading || notificationSettingsSaving} className="inline-flex h-11 items-center rounded-xl bg-orange-500 px-5 text-sm font-semibold text-white transition hover:bg-orange-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60">
+                  {notificationSettingsSaving ? "Saving…" : "Save notification sounds"}
+                </button>
+              </div>
+            </Card>
+
+            <Card className="p-6">
               <h2 className="text-lg font-bold text-slate-900">Display preferences</h2>
               <p className="text-sm text-slate-500">Choose how the dashboard looks for your session.</p>
               <div className="mt-4 flex items-center gap-4">
@@ -1280,5 +1353,17 @@ export default function SettingsPage() {
         ) : null}
       </div>
     </div>
+  );
+}
+
+function SoundSelect({ label, value, onChange }: { label: string; value: NotificationSound; onChange: (value: NotificationSound) => void }) {
+  return (
+    <label className="block">
+      <span className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-200">{label}</span>
+      <select name={label === "Operational alerts" ? "operations_sound" : "customer_request_sound"} autoComplete="off" value={value} onChange={(event) => onChange(event.target.value as NotificationSound)} className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 disabled:cursor-not-allowed dark:border-slate-700 dark:bg-slate-950 dark:text-white">
+        <option value="kitchen_bell">Kitchen bell</option>
+        <option value="service_chime">Service chime</option>
+      </select>
+    </label>
   );
 }

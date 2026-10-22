@@ -259,15 +259,21 @@ async function backendRequest<T>(
 ): Promise<T> {
   const url = `${getBaseUrl(options.baseUrl)}${path}`;
   const hasBody = options.body !== undefined;
+  const isFormData =
+    hasBody &&
+    typeof FormData !== "undefined" &&
+    options.body instanceof FormData;
 
   const response = await fetch(url, {
     method: options.method || "GET",
     headers: {
-      ...(hasBody ? { "Content-Type": "application/json" } : {}),
+      ...(hasBody && !isFormData ? { "Content-Type": "application/json" } : {}),
       ...(options.token ? { Authorization: `Bearer ${options.token}` } : {}),
     },
     cache: "no-store",
-    ...(hasBody ? { body: JSON.stringify(options.body) } : {}),
+    ...(hasBody
+      ? { body: isFormData ? options.body as FormData : JSON.stringify(options.body) }
+      : {}),
   });
 
   if (!response.ok) {
@@ -303,8 +309,12 @@ async function backendRequest<T>(
       // not JSON
     }
 
+    // Never expose database statements, stack traces, or infrastructure
+    // details in the admin UI. The backend logs retain the diagnostic error.
     const safeMessage =
-      (message || "").trim() || `Request failed with status ${response.status}`;
+      response.status >= 500
+        ? "The server could not complete this request. Try again or check the backend logs."
+        : (message || "").trim() || `Request failed with status ${response.status}`;
     throw new Error(`[${response.status}] ${path}: ${safeMessage}`);
   }
 
@@ -313,6 +323,171 @@ async function backendRequest<T>(
 
 export async function backendFetch<T>(path: string, options: BackendClientOptions = {}): Promise<T> {
   return backendRequest<T>(path, options);
+}
+
+export type NotificationSound = "kitchen_bell" | "service_chime";
+
+export type PlatformNotificationSettings = {
+  operations_sound: NotificationSound;
+  customer_request_sound: NotificationSound;
+  updated_at?: string | null;
+};
+
+export function getPlatformNotificationSettings(options: BackendClientOptions = {}) {
+  return backendFetch<BaseResponse<PlatformNotificationSettings>>("/admin/platform/notification-settings", options);
+}
+
+export function updatePlatformNotificationSettings(
+  payload: Pick<PlatformNotificationSettings, "operations_sound" | "customer_request_sound">,
+  options: BackendClientOptions = {},
+) {
+  return backendRequest<BaseResponse<PlatformNotificationSettings>>("/admin/platform/notification-settings", {
+    ...options,
+    method: "PUT",
+    body: payload,
+  });
+}
+
+export type MenuImportPayload = {
+  version: 1;
+  categories: Array<{ name: string; type: "kitchen" | "bar" | "cafe" }>;
+  modifier_groups: Array<{ name: string; required?: boolean; min_selections?: number; max_selections?: number | null; options: Array<{ name: string; price_adjustment?: number; is_default?: boolean }> }>;
+  items: Array<{ name: string; price: number; category: string; description?: string | null; modifier_groups?: string[] }>;
+};
+
+export type MenuImportResult = {
+  valid?: boolean;
+  errors?: string[];
+  duplicates?: string[];
+  summary?: Record<string, number>;
+  created?: Record<string, number>;
+  skipped_duplicates?: string[];
+};
+
+export function importRestaurantMenu(restaurantId: number, payload: MenuImportPayload, confirm: boolean, options: BackendClientOptions = {}) {
+  return backendRequest<BaseResponse<MenuImportResult>>(`/admin/platform/restaurants/${restaurantId}/menu-import`, { ...options, method: "POST", body: { payload, confirm } });
+}
+
+export type DashboardPromoBanner = {
+  id: number;
+  image_url: string;
+  mobile_image_url: string;
+  desktop_image_url: string;
+  alt_text: string;
+  action_type: "none" | "external_url" | "internal_path";
+  action_value: string | null;
+  open_in_new_tab: boolean;
+  is_active: boolean;
+  sort_order: number;
+};
+
+export type BackendRestaurantOption = Pick<
+  BackendRestaurant,
+  | "id"
+  | "name"
+  | "address"
+  | "phone"
+  | "registered_by"
+  | "profile_picture"
+  | "cover_photo"
+  | "timezone"
+  | "kot_enabled"
+  | "hotel_enabled"
+  | "restaurant_enabled"
+  | "attendance_enabled"
+  | "billing_mode"
+  | "plan_state"
+  | "trial_ends_at"
+  | "paid_ends_at"
+>;
+
+export type DashboardPromoBannerUpdatePayload = {
+  alt_text?: string;
+  action_type?: "none" | "external_url" | "internal_path";
+  action_value?: string | null;
+  open_in_new_tab?: boolean;
+  is_active?: boolean;
+  sort_order?: number;
+};
+
+const DASHBOARD_BANNERS_PATH = "/admin/platform/dashboard-banners";
+
+export async function getDashboardPromoBanners(
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<DashboardPromoBanner[]>> {
+  return backendFetch<BaseResponse<DashboardPromoBanner[]>>(
+    DASHBOARD_BANNERS_PATH,
+    options,
+  );
+}
+
+export async function createDashboardPromoBanner(
+  payload: {
+    mobileFile: File;
+    desktopFile: File;
+    altText?: string;
+    actionType?: "none" | "external_url" | "internal_path";
+    actionValue?: string | null;
+    openInNewTab?: boolean;
+  },
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<DashboardPromoBanner>> {
+  const form = new FormData();
+  form.set("mobile_file", payload.mobileFile);
+  form.set("desktop_file", payload.desktopFile);
+  form.set("alt_text", payload.altText || "");
+  form.set("action_type", payload.actionType || "none");
+  if (payload.actionValue) form.set("action_value", payload.actionValue);
+  form.set("open_in_new_tab", String(Boolean(payload.openInNewTab)));
+  return backendRequest<BaseResponse<DashboardPromoBanner>>(
+    DASHBOARD_BANNERS_PATH,
+    { ...options, method: "POST", body: form },
+  );
+}
+
+export async function replaceDashboardPromoBannerImage(
+  bannerId: number,
+  variant: "mobile" | "desktop",
+  file: File,
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<DashboardPromoBanner>> {
+  const form = new FormData();
+  form.set("file", file);
+  return backendRequest<BaseResponse<DashboardPromoBanner>>(
+    `${DASHBOARD_BANNERS_PATH}/${bannerId}/${variant}-image`,
+    { ...options, method: "PUT", body: form },
+  );
+}
+
+export async function updateDashboardPromoBanner(
+  bannerId: number,
+  payload: DashboardPromoBannerUpdatePayload,
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<DashboardPromoBanner>> {
+  return backendRequest<BaseResponse<DashboardPromoBanner>>(
+    `${DASHBOARD_BANNERS_PATH}/${bannerId}`,
+    { ...options, method: "PATCH", body: payload },
+  );
+}
+
+export async function reorderDashboardPromoBanners(
+  ids: number[],
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<DashboardPromoBanner[]>> {
+  return backendRequest<BaseResponse<DashboardPromoBanner[]>>(
+    `${DASHBOARD_BANNERS_PATH}/reorder`,
+    { ...options, method: "PUT", body: { ids } },
+  );
+}
+
+export async function deleteDashboardPromoBanner(
+  bannerId: number,
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<null>> {
+  return backendRequest<BaseResponse<null>>(
+    `${DASHBOARD_BANNERS_PATH}/${bannerId}`,
+    { ...options, method: "DELETE" },
+  );
 }
 
 export type RedisHealthRead = {
@@ -344,6 +519,15 @@ export async function getRestaurants(
   options: BackendClientOptions = {},
 ): Promise<BaseResponse<BackendRestaurant[]>> {
   return backendFetch<BaseResponse<BackendRestaurant[]>>("/restaurants", options);
+}
+
+export async function getPlatformRestaurantOptions(
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<BackendRestaurantOption[]>> {
+  return backendFetch<BaseResponse<BackendRestaurantOption[]>>(
+    "/admin/platform/restaurants/options",
+    options,
+  );
 }
 
 export async function getRestaurant(
@@ -800,6 +984,91 @@ export async function updatePlatformStaffPassword(
 // ==========================================
 
 export type BillingPlanStatus = "active" | "retired" | string;
+
+export type SmsCreditPackage = {
+  id: number;
+  code: string;
+  label: string;
+  credits: number;
+  price_npr: string;
+  unit_price_npr: string;
+  is_active: boolean;
+  display_order: number;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
+export type SmsCreditPackageCreatePayload = {
+  code: string;
+  label: string;
+  credits: number;
+  price_npr: string;
+  is_active: boolean;
+  display_order: number;
+};
+
+export type SmsCreditPackageUpdatePayload = Partial<
+  Omit<SmsCreditPackageCreatePayload, "code">
+>;
+
+export type PlatformSmsCapacity = {
+  generated_at: string;
+  provider_balance: {
+    available_credits: number;
+    safety_buffer_credits: number;
+    last_updated_at?: string | null;
+    source: "manual_sms_pasal_check" | string;
+  };
+  recommended_top_up: {
+    coverage_target_credits: number;
+    restaurant_commitment_credits: number;
+    platform_forecast_30d_credits: number;
+    safety_buffer_credits: number;
+    credits_to_add: number;
+  };
+  restaurants: {
+    total: number;
+    with_sms_wallet: number;
+    paid_purchase_count: number;
+    purchased_credits: number;
+    purchased_npr: number;
+    available_credits: number;
+    reserved_credits: number;
+    consumed_credits: number;
+    rows: Array<{
+      restaurant_id: number;
+      restaurant_name: string;
+      purchase_count: number;
+      purchased_credits: number;
+      purchased_npr: number;
+      available_credits: number;
+      reserved_credits: number;
+    }>;
+  };
+  customers: {
+    local_customers: number;
+    customer_accounts: number;
+    verified_phone_accounts: number;
+  };
+  forecast: {
+    window_days: number;
+    customer_accounts_created_7d: number;
+    customer_accounts_created_30d: number;
+    forecast_customer_accounts_next_30d: number;
+    restaurant_customers_created_7d: number;
+    restaurant_customers_created_30d: number;
+    forecast_restaurant_customers_next_30d: number;
+    successful_phone_otp_sms_30d: number;
+    new_customer_phone_contacts_30d: number;
+    estimated_platform_sms_next_30d: number;
+    assumptions: string[];
+  };
+};
+
+export type PlatformSmsCapacitySettingsPayload = {
+  provider_available_credits: number;
+  safety_buffer_credits: number;
+};
 export type BillingVersionStatus = "draft" | "published" | "retired" | string;
 export type BillingSubscriptionStatus =
   | "scheduled"
@@ -1054,6 +1323,16 @@ export type BillingSubscriptionAssignPayload = {
   reason: string;
 };
 
+export type RestaurantPlanDirectAssignPayload = {
+  plan_version_id: number;
+  duration_months: number;
+};
+
+export type BillingSubscriptionPeriodAdjustmentPayload = {
+  days_delta: number;
+  reason?: string;
+};
+
 export type BillingSubscriptionUpdatePayload = Partial<
   Pick<
     BillingSubscription,
@@ -1117,6 +1396,7 @@ export type BillingInvoice = {
   stored_status?: string;
   line_items?: Array<Record<string, unknown>>;
   source?: "manual" | "contract" | "upgrade" | "renewal" | string;
+  checkout_status?: "pending" | "paid" | "failed" | "expired" | "superseded" | "review_required" | string | null;
   voided_at?: string | null;
   void_reason?: string | null;
   payments?: BillingPayment[];
@@ -1181,6 +1461,36 @@ export type BillingUpgradeRequest = {
   invoice_id?: number | null;
   completed_at?: string | null;
   created_at: string;
+};
+
+export type BillingPromoCode = {
+  id: number;
+  code: string;
+  description?: string | null;
+  discount_type: "percentage" | "fixed";
+  discount_value: number | string;
+  applicable_plan_codes: string[];
+  billing_interval_months: number[];
+  starts_at?: string | null;
+  ends_at?: string | null;
+  max_redemptions?: number | null;
+  per_account_limit: number;
+  is_active: boolean;
+  redeemed_count: number;
+  created_at?: string | null;
+};
+
+export type BillingPromoCodeCreatePayload = {
+  code?: string | null;
+  description?: string | null;
+  discount_type: "percentage" | "fixed";
+  discount_value: number;
+  applicable_plan_codes?: string[];
+  billing_interval_months?: number[];
+  ends_at?: string | null;
+  max_redemptions?: number | null;
+  per_account_limit?: number;
+  is_active?: boolean;
 };
 
 export type BillingAuditLog = {
@@ -1280,6 +1590,52 @@ export function isBackendRouteUnavailable(error: unknown): boolean {
 }
 
 const PLATFORM_BILLING_PATH = "/admin/platform/billing";
+
+export async function getSmsCreditPackages(
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<SmsCreditPackage[]>> {
+  return backendFetch<BaseResponse<SmsCreditPackage[]>>(
+    `${PLATFORM_BILLING_PATH}/sms-credit-packages`,
+    options,
+  );
+}
+
+export async function getPlatformSmsCapacity(
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<PlatformSmsCapacity>> {
+  return backendFetch<BaseResponse<PlatformSmsCapacity>>("/admin/platform/sms-capacity", options);
+}
+
+export async function updatePlatformSmsCapacitySettings(
+  payload: PlatformSmsCapacitySettingsPayload,
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<PlatformSmsCapacitySettingsPayload>> {
+  return backendRequest<BaseResponse<PlatformSmsCapacitySettingsPayload>>(
+    "/admin/platform/sms-capacity/settings",
+    { ...options, method: "PUT", body: payload },
+  );
+}
+
+export async function createSmsCreditPackage(
+  payload: SmsCreditPackageCreatePayload,
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<SmsCreditPackage>> {
+  return backendRequest<BaseResponse<SmsCreditPackage>>(
+    `${PLATFORM_BILLING_PATH}/sms-credit-packages`,
+    { ...options, method: "POST", body: payload },
+  );
+}
+
+export async function updateSmsCreditPackage(
+  packageId: number,
+  payload: SmsCreditPackageUpdatePayload,
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<SmsCreditPackage>> {
+  return backendRequest<BaseResponse<SmsCreditPackage>>(
+    `${PLATFORM_BILLING_PATH}/sms-credit-packages/${packageId}`,
+    { ...options, method: "PATCH", body: payload },
+  );
+}
 
 export async function getPublicBillingCatalog(
   options: BackendClientOptions = {},
@@ -1579,6 +1935,48 @@ export async function reviewBillingUpgradeRequest(
   );
 }
 
+export async function getBillingPromoCodes(
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<BillingPromoCode[]>> {
+  return backendFetch<BaseResponse<BillingPromoCode[]>>(
+    `${PLATFORM_BILLING_PATH}/promo-codes`,
+    options,
+  );
+}
+
+export async function createBillingPromoCode(
+  payload: BillingPromoCodeCreatePayload,
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<BillingPromoCode>> {
+  return backendRequest<BaseResponse<BillingPromoCode>>(
+    `${PLATFORM_BILLING_PATH}/promo-codes`,
+    { ...options, method: "POST", body: payload },
+  );
+}
+
+export async function updateBillingPromoCode(
+  promoId: number,
+  payload: { is_active?: boolean; ends_at?: string | null; max_redemptions?: number | null; description?: string | null },
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<BillingPromoCode>> {
+  return backendRequest<BaseResponse<BillingPromoCode>>(
+    `${PLATFORM_BILLING_PATH}/promo-codes/${promoId}`,
+    { ...options, method: "PATCH", body: payload },
+  );
+}
+
+export async function resolveBillingUpgradeRequest(
+  requestId: number,
+  action: "approve" | "reject",
+  durationMonths: number | undefined,
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<{ request_id: number; status: string; subscription?: BillingSubscription }>> {
+  return backendRequest<BaseResponse<{ request_id: number; status: string; subscription?: BillingSubscription }>>(
+    `${PLATFORM_BILLING_PATH}/upgrade-requests/${requestId}/resolve`,
+    { ...options, method: "POST", body: { action, duration_months: durationMonths } },
+  );
+}
+
 export async function fulfillBillingUpgradeRequest(
   requestId: number,
   payload: BillingUpgradeFulfillPayload,
@@ -1610,6 +2008,28 @@ export async function assignBillingSubscription(
 ): Promise<BaseResponse<BillingSubscription>> {
   return backendRequest<BaseResponse<BillingSubscription>>(
     `${PLATFORM_BILLING_PATH}/accounts/${billingAccountId}/subscription`,
+    { ...options, method: "POST", body: payload },
+  );
+}
+
+export async function assignRestaurantPlanDirectly(
+  restaurantId: number,
+  payload: RestaurantPlanDirectAssignPayload,
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<BillingSubscription>> {
+  return backendRequest<BaseResponse<BillingSubscription>>(
+    `${PLATFORM_BILLING_PATH}/restaurants/${restaurantId}/direct-plan`,
+    { ...options, method: "POST", body: payload },
+  );
+}
+
+export async function adjustBillingSubscriptionPeriod(
+  subscriptionId: number,
+  payload: BillingSubscriptionPeriodAdjustmentPayload,
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<BillingSubscription>> {
+  return backendRequest<BaseResponse<BillingSubscription>>(
+    `${PLATFORM_BILLING_PATH}/subscriptions/${subscriptionId}/period-adjustment`,
     { ...options, method: "POST", body: payload },
   );
 }
@@ -1741,4 +2161,117 @@ export async function runBillingLifecycle(
     `${PLATFORM_BILLING_PATH}/lifecycle/run`,
     { ...options, method: "POST", body: { reason } },
   );
+}
+
+export type HelpGuideSection = {
+  title: string;
+  body: string;
+  bullets: string[];
+};
+
+export type HelpGuide = {
+  id: number;
+  slug: string;
+  title: string;
+  summary: string;
+  category: string;
+  icon: string;
+  sections: HelpGuideSection[];
+  estimated_minutes?: number | null;
+  sort_order: number;
+  is_featured: boolean;
+  is_published: boolean;
+};
+
+export type TutorialVideo = {
+  id: number;
+  title: string;
+  description?: string | null;
+  youtube_url: string;
+  thumbnail_url?: string | null;
+  is_main: boolean;
+  category: string;
+  duration_minutes?: number | null;
+  sort_order: number;
+  is_published: boolean;
+};
+
+export type HelpCenterSettings = {
+  heading: string;
+  subheading: string;
+  support_message: string;
+  whatsapp_number?: string | null;
+  phone_number?: string | null;
+  email?: string | null;
+  support_hours?: string | null;
+  feedback_enabled: boolean;
+};
+
+export type HelpCenter = {
+  settings: HelpCenterSettings;
+  guides: HelpGuide[];
+  videos: TutorialVideo[];
+};
+
+export type HelpGuidePayload = Omit<HelpGuide, "id">;
+export type TutorialVideoPayload = Omit<TutorialVideo, "id">;
+
+const HELP_CENTER_ADMIN_PATH = "/admin/platform/help-center";
+
+export function getHelpCenter(options: BackendClientOptions = {}) {
+  return backendFetch<BaseResponse<HelpCenter>>(HELP_CENTER_ADMIN_PATH, options);
+}
+
+export function updateHelpCenterSettings(payload: HelpCenterSettings, options: BackendClientOptions = {}) {
+  return backendRequest<BaseResponse<HelpCenterSettings>>(`${HELP_CENTER_ADMIN_PATH}/settings`, {
+    ...options,
+    method: "PUT",
+    body: payload,
+  });
+}
+
+export function createHelpGuide(payload: HelpGuidePayload, options: BackendClientOptions = {}) {
+  return backendRequest<BaseResponse<HelpGuide>>(`${HELP_CENTER_ADMIN_PATH}/guides`, {
+    ...options,
+    method: "POST",
+    body: payload,
+  });
+}
+
+export function updateHelpGuide(id: number, payload: Partial<HelpGuidePayload>, options: BackendClientOptions = {}) {
+  return backendRequest<BaseResponse<HelpGuide>>(`${HELP_CENTER_ADMIN_PATH}/guides/${id}`, {
+    ...options,
+    method: "PUT",
+    body: payload,
+  });
+}
+
+export function deleteHelpGuide(id: number, options: BackendClientOptions = {}) {
+  return backendRequest<BaseResponse<null>>(`${HELP_CENTER_ADMIN_PATH}/guides/${id}`, {
+    ...options,
+    method: "DELETE",
+  });
+}
+
+export function createTutorialVideo(payload: TutorialVideoPayload, options: BackendClientOptions = {}) {
+  return backendRequest<BaseResponse<TutorialVideo>>("/tutorial-videos", {
+    ...options,
+    method: "POST",
+    body: payload,
+  });
+}
+
+export function updateTutorialVideo(id: number, payload: Partial<TutorialVideoPayload>, options: BackendClientOptions = {}) {
+  return backendRequest<BaseResponse<TutorialVideo>>(`/tutorial-videos/${id}`, {
+    ...options,
+    method: "PUT",
+    body: payload,
+  });
+}
+
+export function deleteTutorialVideo(id: number, options: BackendClientOptions = {}) {
+  return backendRequest<BaseResponse<Record<string, never>>>(`/tutorial-videos/${id}`, {
+    ...options,
+    method: "DELETE",
+  });
 }

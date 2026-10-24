@@ -39,6 +39,7 @@ type Props = {
 };
 
 const ASSIGNMENT_TERMS = [1, 3, 6, 12];
+const GROW_LIMIT_KEYS = ["grow.messages.monthly", "grow.campaigns.monthly_limit", "grow.campaigns.max_recipients"];
 
 const token = () => window.localStorage.getItem("accessToken") || undefined;
 
@@ -189,6 +190,7 @@ export default function RestaurantSubscriptionCard(props: Props) {
     && selectedPlanVersion.version_number > assignedPlanVersion,
   );
   const booleanDefinitions = definitions.filter((definition) => definition.value_type === "boolean" && definition.is_client_visible !== false);
+  const growLimitDefinitions = definitions.filter((definition) => definition.value_type === "integer" && GROW_LIMIT_KEYS.includes(definition.key));
 
   const applyPlan = async () => {
     const version = selectedPlan ? currentVersion(selectedPlan) : null;
@@ -287,6 +289,34 @@ export default function RestaurantSubscriptionCard(props: Props) {
     }
   };
 
+  const saveGrowLimit = async (definition: BillingEntitlementDefinition, value: number | null) => {
+    if (!currentSubscription || !canManageOverrides) return;
+    const existing = currentSubscription.overrides?.find((item) => item.entitlement_key === definition.key);
+    const planEntitlements = typeof currentSubscription.plan_version === "object" ? currentSubscription.plan_version?.entitlements || {} : {};
+    const planValue = planEntitlements[definition.key] ?? null;
+    setBusy(`limit-${definition.key}`);
+    setError(null);
+    try {
+      if (value !== planValue) {
+        await createBillingSubscriptionOverride(currentSubscription.id, {
+          entitlement_key: definition.key,
+          override_value: value,
+          reason: "Restaurant Grow limit set from restaurant access page",
+        }, { token: token() });
+      }
+      if (existing) {
+        await deleteBillingSubscriptionOverride(currentSubscription.id, existing.id, "Replacing restaurant Grow limit", { token: token() });
+      }
+      setNotice(`${definition.label || label(definition.key)} ${value === planValue ? "reset to the plan default" : "updated for this restaurant"}.`);
+      await load();
+    } catch (saveError) {
+      await load();
+      setError(messageFrom(saveError, "Could not update this Grow limit."));
+    } finally {
+      setBusy(null);
+    }
+  };
+
   if (mode === "loading") {
     return <Card className="p-6 xl:col-span-3"><h2 className="text-lg font-bold text-slate-900">Plan & access</h2><p className="mt-2 text-sm text-slate-500">Loading restaurant access...</p></Card>;
   }
@@ -345,13 +375,14 @@ export default function RestaurantSubscriptionCard(props: Props) {
       </section>
 
       <FeatureOverrides definitions={booleanDefinitions} subscription={currentSubscription} canManage={canManageOverrides} busy={busy} onToggle={toggleOverride} onClear={clearOverride} />
+      {currentSubscription && growLimitDefinitions.length ? <GrowLimits definitions={growLimitDefinitions} subscription={currentSubscription} canManage={canManageOverrides} busy={busy} onSave={saveGrowLimit} /> : null}
       <AssignmentHistory subscriptions={subscriptions} />
     </Card>
   );
 }
 
 function FeatureOverrides({ definitions, subscription, canManage, busy, onToggle, onClear }: { definitions: BillingEntitlementDefinition[]; subscription: BillingSubscription | null; canManage: boolean; busy: string | null; onToggle: (definition: BillingEntitlementDefinition) => Promise<void>; onClear: (definition: BillingEntitlementDefinition) => Promise<void> }) {
-  if (!subscription) return <section className="border-t border-slate-200 px-6 py-6 sm:px-7"><h3 className="text-lg font-bold text-slate-950">Feature access</h3><p className="mt-1 text-sm text-slate-500">Assign a plan before reviewing this restaurant's feature access.</p></section>;
+  if (!subscription) return <section className="border-t border-slate-200 px-6 py-6 sm:px-7"><h3 className="text-lg font-bold text-slate-950">Feature access</h3><p className="mt-1 text-sm text-slate-500">Assign a plan before reviewing this restaurant&apos;s feature access.</p></section>;
   const planEntitlements = typeof subscription.plan_version === "object" ? subscription.plan_version?.entitlements || {} : {};
   const visibleDefinitions = definitions.filter((definition) => definition.is_client_visible !== false);
   const includedCount = visibleDefinitions.filter((definition) => Boolean(planEntitlements[definition.key])).length;
@@ -390,6 +421,35 @@ function FeatureOverrides({ definitions, subscription, canManage, busy, onToggle
     {!visibleDefinitions.length ? <p className="mt-4 text-sm text-slate-500">No feature controls are available for this catalog.</p> : null}
     {!canManage ? <p className="mt-3 text-xs text-slate-500">You have read-only access to plan features and restaurant exceptions.</p> : null}
   </section>;
+}
+
+function GrowLimits({ definitions, subscription, canManage, busy, onSave }: { definitions: BillingEntitlementDefinition[]; subscription: BillingSubscription; canManage: boolean; busy: string | null; onSave: (definition: BillingEntitlementDefinition, value: number | null) => Promise<void> }) {
+  const planEntitlements = typeof subscription.plan_version === "object" ? subscription.plan_version?.entitlements || {} : {};
+  return <section className="border-t border-slate-200 px-6 py-6 sm:px-7">
+    <h3 className="text-lg font-bold text-slate-950">Grow limits for this restaurant</h3>
+    <p className="mt-1 text-sm leading-6 text-slate-500">These limits use the assigned {subscription.plan_name || subscription.plan_code || "plan"} version. A restaurant value takes precedence until reset.</p>
+    <div className="mt-4 divide-y rounded-2xl border border-slate-200">
+      {definitions.map((definition) => {
+        const override = subscription.overrides?.find((item) => item.entitlement_key === definition.key);
+        const planValue = planEntitlements[definition.key] ?? null;
+        const value = override ? (override.override_value !== undefined ? override.override_value : override.value ?? null) : planValue;
+        return <GrowLimitRow key={`${definition.key}:${value}:${Boolean(override)}`} definition={definition} value={value} planValue={planValue} overridden={Boolean(override)} canManage={canManage} busy={busy === `limit-${definition.key}`} onSave={(next) => onSave(definition, next)} />;
+      })}
+    </div>
+  </section>;
+}
+
+function GrowLimitRow({ definition, value, planValue, overridden, canManage, busy, onSave }: { definition: BillingEntitlementDefinition; value: boolean | number | string | null; planValue: boolean | number | string | null; overridden: boolean; canManage: boolean; busy: boolean; onSave: (value: number | null) => Promise<void> }) {
+  const [draft, setDraft] = useState(value === null ? "" : String(value));
+  const parsed = draft.trim() === "" ? null : Number(draft);
+  const valid = parsed === null || (Number.isSafeInteger(parsed) && parsed >= 0);
+  const changed = valid && parsed !== value;
+  const blankLabel = definition.key === "grow.messages.monthly" ? "Unlimited" : definition.key === "grow.campaigns.monthly_limit" ? "Default: 4" : "Default: 500";
+  return <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="min-w-0"><p className="text-sm font-bold text-slate-900">{definition.label || label(definition.key)}</p><p className="mt-1 text-xs leading-5 text-slate-500">{definition.description} Plan: {planValue === null ? blankLabel : String(planValue)}{overridden ? " · Restaurant exception" : ""}</p></div>
+    <div className="flex flex-wrap items-center gap-2"><label><span className="sr-only">{definition.label || label(definition.key)} for this restaurant</span><input type="number" name={definition.key} autoComplete="off" min="0" step="1" inputMode="numeric" value={draft} onChange={(event) => setDraft(event.target.value)} disabled={!canManage || busy} placeholder={blankLabel} aria-invalid={!valid} className="h-10 w-32 rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 focus-visible:border-orange-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-100 disabled:bg-slate-50" /></label><button type="button" disabled={!canManage || busy || !changed} onClick={() => void onSave(parsed)} className="h-10 rounded-lg bg-orange-500 px-4 text-sm font-semibold text-white hover:bg-orange-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600 disabled:cursor-not-allowed disabled:opacity-50">{busy ? "Saving…" : "Save limit"}</button>{overridden ? <button type="button" disabled={!canManage || busy} onClick={() => void onSave(planValue === null ? null : Number(planValue))} className="h-10 px-2 text-sm font-semibold text-orange-700 hover:text-orange-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-600 disabled:opacity-50">Reset</button> : null}</div>
+    {!valid ? <p className="text-xs text-red-700" role="alert">Enter a whole number of zero or more.</p> : null}
+  </div>;
 }
 
 function AssignmentHistory({ subscriptions }: { subscriptions: BillingSubscription[] }) {

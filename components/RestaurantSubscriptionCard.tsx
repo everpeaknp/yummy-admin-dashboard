@@ -5,6 +5,7 @@ import Card from "@/components/Card";
 import {
   adjustBillingSubscriptionPeriod,
   assignRestaurantPlanDirectly,
+  switchBillingSubscriptionCurrentPlan,
   createBillingSubscriptionOverride,
   deleteBillingSubscriptionOverride,
   getBillingEntitlementDefinitions,
@@ -119,7 +120,10 @@ export default function RestaurantSubscriptionCard(props: Props) {
   const [definitions, setDefinitions] = useState<BillingEntitlementDefinition[]>([]);
   const [selectedPlanId, setSelectedPlanId] = useState<number | null>(null);
   const [assignmentDuration, setAssignmentDuration] = useState(12);
-  const [adjustmentDays, setAdjustmentDays] = useState(0);
+  const [adjustmentDays, setAdjustmentDays] = useState("");
+  const [switchPriceId, setSwitchPriceId] = useState("");
+  const [switchReason, setSwitchReason] = useState("");
+  const [extensionReason, setExtensionReason] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -181,6 +185,19 @@ export default function RestaurantSubscriptionCard(props: Props) {
   const assignedPlanVersion = currentSubscription?.plan_version_number
     ?? (typeof currentSubscription?.plan_version === "object" ? currentSubscription.plan_version?.version_number : null);
   const selectedPlanVersion = selectedPlan ? currentVersion(selectedPlan) : null;
+  const switchPrices = (selectedPlanVersion?.prices || []).filter((price) => {
+    const now = Date.now();
+    return price.id && price.is_active !== false
+      && (!price.effective_from || new Date(price.effective_from).getTime() <= now)
+      && (!price.effective_to || new Date(price.effective_to).getTime() >= now);
+  });
+  const currentPrice = currentSubscription?.plan_version_prices?.find((price) => price.id === currentSubscription.selected_price_id);
+  const matchingPrice = switchPrices.find((price) => price.billing_interval_months === currentPrice?.billing_interval_months && price.price_type === currentPrice?.price_type)
+    || switchPrices.find((price) => price.billing_interval_months === currentPrice?.billing_interval_months && price.price_type !== "renewal")
+    || (switchPrices.length === 1 ? switchPrices[0] : null);
+  const selectedSwitchPriceId = switchPriceId ? Number(switchPriceId) : matchingPrice?.id ?? null;
+  const canSwitch = Boolean(currentSubscription && ["active", "trialing", "grace"].includes(currentSubscription.effective_status || currentSubscription.status)
+    && selectedPlanVersion && selectedPlanVersion.id !== currentSubscription.plan_version_id);
   const selectedPlanIsNewer = Boolean(
     currentSubscription
     && selectedPlan
@@ -195,6 +212,7 @@ export default function RestaurantSubscriptionCard(props: Props) {
   const applyPlan = async () => {
     const version = selectedPlan ? currentVersion(selectedPlan) : null;
     if (!version || !selectedPlan) return;
+    if (currentSubscription && !window.confirm(`Start a new ${assignmentDuration}-month ${selectedPlan.name} term for ${props.restaurant.name}? This replaces the current access dates and feature exceptions.`)) return;
     setBusy("apply-plan");
     setError(null);
     try {
@@ -212,14 +230,38 @@ export default function RestaurantSubscriptionCard(props: Props) {
     }
   };
 
+  const switchCurrentPlan = async () => {
+    if (!currentSubscription || !selectedPlanVersion || !selectedPlan || !canSwitch || switchReason.trim().length < 3 || (switchPrices.length && !selectedSwitchPriceId)) return;
+    if (!window.confirm(`Switch ${props.restaurant.name} to ${selectedPlan.name} version ${selectedPlanVersion.version_number}? The current access dates and exceptions will be preserved. This affects every restaurant on the billing account.`)) return;
+    setBusy("switch-plan");
+    setError(null);
+    try {
+      await switchBillingSubscriptionCurrentPlan(currentSubscription.id, {
+        plan_version_id: selectedPlanVersion.id,
+        selected_price_id: selectedSwitchPriceId,
+        reason: switchReason.trim(),
+      }, { token: token() });
+      setSwitchReason("");
+      setSwitchPriceId("");
+      setNotice(`${props.restaurant.name} switched to ${selectedPlan.name} version ${selectedPlanVersion.version_number}. Access dates were preserved.`);
+      await load();
+    } catch (saveError) {
+      setError(messageFrom(saveError, "Could not switch the current plan."));
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const adjustRemainingDays = async () => {
-    if (!currentSubscription || !Number.isInteger(adjustmentDays) || adjustmentDays === 0) return;
+    const days = Number(adjustmentDays);
+    if (!currentSubscription?.current_period_end || !["active", "trialing", "grace"].includes(currentSubscription.effective_status || currentSubscription.status) || !Number.isInteger(days) || days < 1 || days > 3650 || extensionReason.trim().length < 3) return;
     setBusy("adjust-days");
     setError(null);
     try {
-      await adjustBillingSubscriptionPeriod(currentSubscription.id, { days_delta: adjustmentDays }, { token: token() });
-      setNotice(`${adjustmentDays > 0 ? `${adjustmentDays} day${adjustmentDays === 1 ? "" : "s"} added` : `${Math.abs(adjustmentDays)} day${Math.abs(adjustmentDays) === 1 ? "" : "s"} removed`} from this restaurant's remaining access.`);
-      setAdjustmentDays(0);
+      await adjustBillingSubscriptionPeriod(currentSubscription.id, { days_delta: days, reason: extensionReason.trim() }, { token: token() });
+      setNotice(`${days} day${days === 1 ? "" : "s"} added to this restaurant's access.`);
+      setAdjustmentDays("");
+      setExtensionReason("");
       await load();
     } catch (saveError) {
       setError(messageFrom(saveError, "Could not adjust the remaining access days."));
@@ -355,21 +397,30 @@ export default function RestaurantSubscriptionCard(props: Props) {
         </aside>
 
         <div className="p-6 sm:p-7">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between"><div><h3 className="text-lg font-bold text-slate-950">Change plan</h3><p className="mt-1 text-sm leading-6 text-slate-500">Choose a plan and a predictable term. The new term replaces the current access period; no payment or invoice is created here.</p></div></div>
+          <div><h3 className="text-lg font-bold text-slate-950">Choose a plan</h3><p className="mt-1 text-sm leading-6 text-slate-500">Select the current published version to switch this access or start a new term.</p></div>
           <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {activePlans.map((plan) => {
               const version = currentVersion(plan);
               const selected = plan.id === selectedPlan?.id;
-              return <button key={plan.id} type="button" onClick={() => setSelectedPlanId(plan.id)} className={`rounded-2xl border p-4 text-left transition ${selected ? "border-orange-500 bg-orange-50 ring-1 ring-orange-500" : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"}`}><div className="flex items-center justify-between gap-3"><p className="font-bold text-slate-950">{plan.name}</p>{selected ? <span className="rounded-full bg-orange-500 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">Selected</span> : null}</div><p className="mt-2 min-h-10 text-xs leading-5 text-slate-500">{plan.description || "Configured restaurant access"}</p><p className="mt-3 text-xs font-semibold text-slate-600">Version {version?.version_number}</p></button>;
+              return <button key={plan.id} type="button" onClick={() => { setSelectedPlanId(plan.id); setSwitchPriceId(""); }} className={`rounded-2xl border p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 ${selected ? "border-orange-500 bg-orange-50 ring-1 ring-orange-500" : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"}`}><div className="flex items-center justify-between gap-3"><p className="font-bold text-slate-950">{plan.name}</p>{selected ? <span className="rounded-full bg-orange-500 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">Selected</span> : null}</div><p className="mt-2 min-h-10 text-xs leading-5 text-slate-500">{plan.description || "Configured restaurant access"}</p><p className="mt-3 text-xs font-semibold text-slate-600">Version {version?.version_number}</p></button>;
             })}
           </div>
-          {selectedPlanIsNewer ? <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-5 text-amber-900">This restaurant is on {selectedPlan?.name} version {assignedPlanVersion}. The current version is {selectedPlanVersion?.version_number}; applying it updates the assigned features and replaces the current access term.</p> : null}
+          {selectedPlanIsNewer ? <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-5 text-amber-900">This restaurant is on {selectedPlan?.name} version {assignedPlanVersion}. Version {selectedPlanVersion?.version_number} is available. Use “Switch current plan” to keep the existing term.</p> : null}
           {!activePlans.length ? <p className="mt-4 rounded-xl border border-dashed border-slate-300 px-4 py-3 text-sm text-slate-500">There are no published plans to assign yet.</p> : null}
+          {currentSubscription ? <div className="mt-6 rounded-2xl border border-orange-200 bg-orange-50/40 p-4">
+            <h4 className="text-sm font-bold text-slate-900">Switch current plan</h4>
+            <p className="mt-1 text-sm leading-5 text-slate-600">Keep the current start and end dates, feature exceptions, and add-ons. Existing invoices stay on the previous plan. The selected price is used for the next renewal invoice, if the term renews.</p>
+            {(currentSubscription.restaurant_ids?.length || 0) > 1 ? <p className="mt-2 text-sm font-semibold text-amber-800">This billing account covers {currentSubscription.restaurant_ids?.length} restaurants; the switch affects all of them.</p> : null}
+            {switchPrices.length ? <label className="mt-4 block max-w-sm"><span className="text-sm font-semibold text-slate-800">Price at renewal</span><select name="switch_price_id" value={selectedSwitchPriceId ?? ""} onChange={(event) => setSwitchPriceId(event.target.value)} className="mt-2 h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 focus-visible:border-orange-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-100"><option value="">Choose price</option>{switchPrices.map((price) => <option key={price.id} value={price.id}>{price.billing_interval_months || "Custom"} month{price.billing_interval_months === 1 ? "" : "s"} · {price.price_type} · {price.quote_only ? "Quote required" : new Intl.NumberFormat("en-NP", { style: "currency", currency: price.currency }).format(Number(price.amount))}</option>)}</select></label> : null}
+            <label className="mt-4 block"><span className="text-sm font-semibold text-slate-800">Reason for audit</span><input type="text" name="switch_reason" autoComplete="off" value={switchReason} maxLength={500} onChange={(event) => setSwitchReason(event.target.value)} placeholder="Why is this plan being switched?" className="mt-2 h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 focus-visible:border-orange-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-100" /></label>
+            <button type="button" disabled={!canManagePlans || busy !== null || !canSwitch || switchReason.trim().length < 3 || (switchPrices.length > 0 && !selectedSwitchPriceId)} onClick={() => void switchCurrentPlan()} className="mt-4 h-11 rounded-xl bg-orange-500 px-5 text-sm font-bold text-white hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50">{busy === "switch-plan" ? "Switching..." : "Switch current plan"}</button>
+            {!canSwitch ? <p className="mt-2 text-xs text-slate-500">Choose a different plan or a newer version to enable the switch.</p> : null}
+          </div> : null}
           <div className="mt-6 flex flex-col gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:flex-row sm:items-end sm:justify-between">
-            <label className="block min-w-52"><span className="block text-sm font-semibold text-slate-800">Access term</span><select value={assignmentDuration} onChange={(event) => setAssignmentDuration(Number(event.target.value))} className="mt-2 h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-900 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100">{ASSIGNMENT_TERMS.map((months) => <option key={months} value={months}>{months} month{months === 1 ? "" : "s"}</option>)}</select></label>
-            <div className="sm:text-right"><p className="text-xs leading-5 text-slate-500">The restaurant keeps access until the selected term ends.</p><button type="button" disabled={!canManagePlans || !selectedPlan || busy === "apply-plan"} onClick={() => void applyPlan()} className="mt-3 inline-flex h-11 items-center justify-center rounded-xl bg-orange-500 px-5 text-sm font-bold text-white shadow-sm transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50">{busy === "apply-plan" ? "Applying plan..." : `Apply ${selectedPlan?.name || "plan"}`}</button></div>
+            <label className="block min-w-52"><span className="block text-sm font-semibold text-slate-800">Start a new term</span><select value={assignmentDuration} onChange={(event) => setAssignmentDuration(Number(event.target.value))} className="mt-2 h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-900 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100">{ASSIGNMENT_TERMS.map((months) => <option key={months} value={months}>{months} month{months === 1 ? "" : "s"}</option>)}</select></label>
+            <div className="sm:text-right"><p className="text-xs leading-5 text-slate-500">Replaces the current access period and does not create a payment or invoice.</p><button type="button" disabled={!canManagePlans || !selectedPlan || busy !== null} onClick={() => void applyPlan()} className="mt-3 inline-flex h-11 items-center justify-center rounded-xl border border-orange-300 bg-white px-5 text-sm font-bold text-orange-700 hover:bg-orange-50 disabled:cursor-not-allowed disabled:opacity-50">{busy === "apply-plan" ? "Applying..." : `Start new ${selectedPlan?.name || "plan"} term`}</button></div>
           </div>
-          {currentSubscription ? <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4"><div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><h3 className="text-sm font-bold text-slate-900">Adjust remaining days</h3><p className="mt-1 text-sm leading-5 text-slate-500">Add days for a short extension or enter a negative number to reduce the remaining access period.</p></div><div className="flex w-full gap-2 sm:w-auto"><label className="min-w-0 flex-1 sm:w-36"><span className="sr-only">Days to add or remove</span><input type="number" min={-3650} max={3650} value={adjustmentDays || ""} onChange={(event) => setAdjustmentDays(event.target.value === "" ? 0 : Number(event.target.value))} placeholder="e.g. +7" className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm font-semibold outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100" /></label><button type="button" disabled={!canManagePlans || adjustmentDays === 0 || busy === "adjust-days"} onClick={() => void adjustRemainingDays()} className="h-11 shrink-0 rounded-xl border border-orange-200 bg-white px-4 text-sm font-bold text-orange-700 hover:bg-orange-50 disabled:cursor-not-allowed disabled:opacity-50">{busy === "adjust-days" ? "Saving..." : adjustmentDays > 0 ? `Add ${adjustmentDays}d` : adjustmentDays < 0 ? `Remove ${Math.abs(adjustmentDays)}d` : "Adjust days"}</button></div></div></div> : null}
+          {currentSubscription ? <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4"><h3 className="text-sm font-bold text-slate-900">Extend access by custom days</h3><p className="mt-1 text-sm leading-5 text-slate-500">Adds days to the current expiry without changing the plan. This change is recorded in the billing audit log.</p>{currentSubscription.current_period_end ? <div className="mt-4 flex flex-wrap items-end gap-3"><label><span className="block text-sm font-semibold text-slate-800">Days to add</span><input type="number" name="extension_days" autoComplete="off" min={1} max={3650} step={1} value={adjustmentDays} onChange={(event) => setAdjustmentDays(event.target.value)} placeholder="e.g. 7" className="mt-2 h-11 w-32 rounded-xl border border-slate-300 bg-white px-3 text-sm font-semibold focus-visible:border-orange-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-100" /></label><label className="min-w-52 flex-1"><span className="block text-sm font-semibold text-slate-800">Reason for audit</span><input type="text" name="extension_reason" autoComplete="off" maxLength={500} value={extensionReason} onChange={(event) => setExtensionReason(event.target.value)} placeholder="Why is access being extended?" className="mt-2 h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm focus-visible:border-orange-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-100" /></label><button type="button" disabled={!canManagePlans || busy !== null || !Number.isInteger(Number(adjustmentDays)) || Number(adjustmentDays) < 1 || Number(adjustmentDays) > 3650 || extensionReason.trim().length < 3} onClick={() => void adjustRemainingDays()} className="h-11 rounded-xl border border-orange-300 bg-white px-4 text-sm font-bold text-orange-700 hover:bg-orange-50 disabled:cursor-not-allowed disabled:opacity-50">{busy === "adjust-days" ? "Extending..." : "Extend access"}</button></div> : <p className="mt-3 text-sm text-slate-600">This plan has no expiry date, so there is no end date to extend.</p>}</div> : null}
           {!canManagePlans ? <p className="mt-3 text-xs text-slate-500">You have read-only subscription access.</p> : null}
         </div>
       </section>
@@ -462,6 +513,6 @@ function LegacyCard(props: Props) {
 
 function Status({ value }: { value: string }) { const tone = value === "active" ? "bg-emerald-100 text-emerald-700" : value === "trialing" ? "bg-blue-100 text-blue-700" : value === "unassigned" ? "bg-slate-100 text-slate-600" : "bg-amber-100 text-amber-800"; return <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide ${tone}`}>{value}</span>; }
 function SummaryRow({ label, value }: { label: string; value: string }) { return <div className="flex items-center justify-between gap-4"><span className="text-slate-500">{label}</span><span className="text-right font-semibold text-slate-800">{value}</span></div>; }
-function Notice({ tone, children }: { tone: "error" | "success"; children: React.ReactNode }) { return <p className={`mt-4 rounded-xl border px-4 py-3 text-sm ${tone === "error" ? "border-red-200 bg-red-50 text-red-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>{children}</p>; }
+function Notice({ tone, children }: { tone: "error" | "success"; children: React.ReactNode }) { return <p role={tone === "error" ? "alert" : "status"} aria-live="polite" className={`mt-4 rounded-xl border px-4 py-3 text-sm ${tone === "error" ? "border-red-200 bg-red-50 text-red-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>{children}</p>; }
 function LegacyField({ label, value, onChange, disabled }: { label: string; value: string; onChange: (value: string) => void; disabled: boolean }) { return <label className="block"><span className="mb-2 block text-sm font-semibold text-slate-700">{label}</span><input type="datetime-local" value={value} onChange={(event) => onChange(event.target.value)} disabled={disabled} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm disabled:bg-slate-50" /></label>; }
 function LegacyToggle({ label, description, active, disabled, onClick }: { label: string; description: string; active: boolean; disabled: boolean; onClick: () => void }) { return <button type="button" onClick={onClick} disabled={disabled} className={`rounded-xl border px-4 py-4 text-left transition disabled:opacity-50 ${active ? "border-orange-300 bg-orange-50" : "border-slate-200 bg-white hover:bg-slate-50"}`}><div className="flex items-center justify-between gap-3"><div><p className="text-sm font-bold text-slate-900">{label}</p><p className="mt-1 text-xs text-slate-500">{description}</p></div><span className={`rounded-full px-2 py-1 text-[10px] font-bold uppercase tracking-wide ${active ? "bg-orange-500 text-white" : "bg-slate-100 text-slate-500"}`}>{active ? "Selected" : "Set"}</span></div></button>; }

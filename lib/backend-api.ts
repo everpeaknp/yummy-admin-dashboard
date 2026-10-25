@@ -1328,6 +1328,12 @@ export type RestaurantPlanDirectAssignPayload = {
   duration_months: number;
 };
 
+export type BillingSubscriptionCurrentPlanSwitchPayload = {
+  plan_version_id: number;
+  selected_price_id: number | null;
+  reason: string;
+};
+
 export type BillingSubscriptionPeriodAdjustmentPayload = {
   days_delta: number;
   reason?: string;
@@ -2019,6 +2025,17 @@ export async function assignRestaurantPlanDirectly(
 ): Promise<BaseResponse<BillingSubscription>> {
   return backendRequest<BaseResponse<BillingSubscription>>(
     `${PLATFORM_BILLING_PATH}/restaurants/${restaurantId}/direct-plan`,
+    { ...options, method: "POST", body: payload },
+  );
+}
+
+export async function switchBillingSubscriptionCurrentPlan(
+  subscriptionId: number,
+  payload: BillingSubscriptionCurrentPlanSwitchPayload,
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<BillingSubscription>> {
+  return backendRequest<BaseResponse<BillingSubscription>>(
+    `${PLATFORM_BILLING_PATH}/subscriptions/${subscriptionId}/switch-current-plan`,
     { ...options, method: "POST", body: payload },
   );
 }

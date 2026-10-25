@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import Card from "@/components/Card";
 import {
   adjustBillingSubscriptionPeriod,
-  assignRestaurantPlanDirectly,
   switchBillingSubscriptionCurrentPlan,
   createBillingSubscriptionOverride,
   deleteBillingSubscriptionOverride,
@@ -19,6 +18,7 @@ import {
   type BillingPlanVersion,
   type BillingSubscription,
 } from "@/lib/backend-api";
+import { assignCurrentRestaurantPlan } from "@/lib/assign-current-restaurant-plan";
 import {
   canManageBillingOverrides,
   canManageBillingSubscriptions,
@@ -156,7 +156,7 @@ export default function RestaurantSubscriptionCard(props: Props) {
       setSubscriptions(hydratedHistory);
       setPlans(catalogPlans);
       setDefinitions(definitionsResponse.data || []);
-      setSelectedPlanId((current) => current ?? assignedVersion?.plan_id ?? catalogVersion?.plan_id ?? catalogPlans.find((plan) => plan.status === "active" && currentVersion(plan))?.id ?? null);
+      setSelectedPlanId(catalogPlans.find((plan) => plan.code === activeSubscription?.plan_code)?.id ?? null);
       setMode("v2");
       props.onV2AvailabilityChange?.(true);
     } catch (loadError) {
@@ -181,7 +181,7 @@ export default function RestaurantSubscriptionCard(props: Props) {
     [subscriptions],
   );
   const activePlans = useMemo(() => plans.filter((plan) => plan.status === "active" && currentVersion(plan)), [plans]);
-  const selectedPlan = activePlans.find((plan) => plan.id === selectedPlanId) || activePlans[0] || null;
+  const selectedPlan = activePlans.find((plan) => plan.id === selectedPlanId) || null;
   const assignedPlanVersion = currentSubscription?.plan_version_number
     ?? (typeof currentSubscription?.plan_version === "object" ? currentSubscription.plan_version?.version_number : null);
   const selectedPlanVersion = selectedPlan ? currentVersion(selectedPlan) : null;
@@ -210,18 +210,18 @@ export default function RestaurantSubscriptionCard(props: Props) {
   const growLimitDefinitions = definitions.filter((definition) => definition.value_type === "integer" && GROW_LIMIT_KEYS.includes(definition.key));
 
   const applyPlan = async () => {
-    const version = selectedPlan ? currentVersion(selectedPlan) : null;
-    if (!version || !selectedPlan) return;
+    if (!selectedPlan) return;
     if (currentSubscription && !window.confirm(`Start a new ${assignmentDuration}-month ${selectedPlan.name} term for ${props.restaurant.name}? This replaces the current access dates and feature exceptions.`)) return;
     setBusy("apply-plan");
     setError(null);
     try {
-      await assignRestaurantPlanDirectly(
+      const version = await assignCurrentRestaurantPlan(
         props.restaurant.id,
-        { plan_version_id: version.id, duration_months: assignmentDuration },
+        selectedPlan.id,
+        assignmentDuration,
         { token: token() },
       );
-      setNotice(`${props.restaurant.name} is now on ${selectedPlan.name} for ${assignmentDuration} month${assignmentDuration === 1 ? "" : "s"}.`);
+      setNotice(`${props.restaurant.name} is now on ${selectedPlan.name} version ${version.version_number} for ${assignmentDuration} month${assignmentDuration === 1 ? "" : "s"}.`);
       await load();
     } catch (saveError) {
       setError(messageFrom(saveError, "Could not change this restaurant's plan."));

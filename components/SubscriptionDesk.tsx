@@ -15,7 +15,6 @@ import {
 
 import {
   adjustBillingSubscriptionPeriod,
-  assignRestaurantPlanDirectly,
   createBillingPromoCode,
   createBillingPlanVersion,
   createBillingSubscriptionOverride,
@@ -39,6 +38,7 @@ import {
   type BillingSubscription,
   type BillingUpgradeRequest,
 } from "@/lib/backend-api";
+import { assignCurrentRestaurantPlan } from "@/lib/assign-current-restaurant-plan";
 import {
   canManageBillingCatalog,
   canManageBillingOverrides,
@@ -205,7 +205,6 @@ export default function SubscriptionDesk({ initialView = "restaurants" }: { init
       if (definitionsResult.status === "fulfilled") setDefinitions(definitionsResult.value.data || []);
       if (requestsResult.status === "fulfilled") setRequests(requestsResult.value.data || []);
       setSelectedRestaurantId((current) => current ?? nextRestaurants[0]?.id ?? null);
-      setSelectedPlanId((current) => current ?? nextPlans.find((plan) => plan.status === "active")?.id ?? null);
       setFeaturePlanId((current) => current ?? nextPlans.find((plan) => plan.status === "active")?.id ?? null);
       const failures = results
         .filter((result): result is PromiseRejectedResult => result.status === "rejected")
@@ -222,7 +221,9 @@ export default function SubscriptionDesk({ initialView = "restaurants" }: { init
   }, [canView, load, view]);
 
   const subscriptionForRestaurant = (restaurantId: number) =>
-    subscriptions.find((subscription) => subscriptionRestaurantIds(subscription).includes(restaurantId)) || null;
+    subscriptions.find((subscription) => subscriptionRestaurantIds(subscription).includes(restaurantId) && ["active", "trialing", "grace"].includes(subscription.effective_status || subscription.status))
+    || subscriptions.find((subscription) => subscriptionRestaurantIds(subscription).includes(restaurantId))
+    || null;
   const restaurantAssignmentSummary = (restaurantId: number) => {
     const subscription = subscriptionForRestaurant(restaurantId);
     return subscription ? `${subscription.plan_name || subscription.plan_code || "Plan"} · ${remainingLabel(subscription)}` : "No plan assigned";
@@ -247,7 +248,10 @@ export default function SubscriptionDesk({ initialView = "restaurants" }: { init
     restaurantNameById.get(restaurantId) || `Restaurant #${restaurantId}`;
   const selectedSubscription = selectedRestaurantId === null ? null : subscriptionForRestaurant(selectedRestaurantId);
   const activePlans = plans.filter((plan) => plan.status === "active" && currentVersion(plan));
-  const selectedPlan = activePlans.find((plan) => plan.id === selectedPlanId) || activePlans[0] || null;
+  const selectedPlan = activePlans.find((plan) => plan.id === selectedPlanId) || null;
+  useEffect(() => {
+    setSelectedPlanId(plans.find((plan) => plan.code === selectedSubscription?.plan_code)?.id ?? null);
+  }, [selectedRestaurantId, selectedSubscription?.id, plans]);
   // An access term is controlled by the operator, not by a plan's historical
   // price rows. Every plan therefore exposes the same predictable choices.
   const assignmentTerms = ASSIGNMENT_TERMS;
@@ -266,12 +270,11 @@ export default function SubscriptionDesk({ initialView = "restaurants" }: { init
   }, [assignmentDuration, assignmentTerms]);
 
   const applyPlan = async () => {
-    const version = selectedPlan ? currentVersion(selectedPlan) : null;
-    if (!selectedRestaurant || !version) return;
+    if (!selectedRestaurant || !selectedPlan) return;
     setBusy("apply-plan"); setError(null);
     try {
-      await assignRestaurantPlanDirectly(selectedRestaurant.id, { plan_version_id: version.id, duration_months: assignmentDuration }, { token: token() });
-      setNotice(`${selectedRestaurant.name} is now on ${selectedPlan.name} for ${assignmentDuration} month${assignmentDuration === 1 ? "" : "s"}.`);
+      const version = await assignCurrentRestaurantPlan(selectedRestaurant.id, selectedPlan.id, assignmentDuration, { token: token() });
+      setNotice(`${selectedRestaurant.name} is now on ${selectedPlan.name} version ${version.version_number} for ${assignmentDuration} month${assignmentDuration === 1 ? "" : "s"}.`);
       await load(view);
     } catch (saveError) {
       setError(messageFrom(saveError, "Could not change this restaurant's plan."));

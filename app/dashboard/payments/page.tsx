@@ -636,15 +636,17 @@ export default function PaymentsPage() {
                 {filtered.length} matching records
               </p>
             </div>
-            <div className="flex gap-2">
+            <div className="flex min-w-0 flex-col gap-2 sm:flex-row">
               <input
                 value={search}
+                aria-label="Search invoices"
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder="Search invoice or account…"
                 className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm sm:w-64"
               />
               <select
                 value={status}
+                aria-label="Filter invoices by status"
                 onChange={(event) => setStatus(event.target.value)}
                 className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
               >
@@ -657,7 +659,7 @@ export default function PaymentsPage() {
               </select>
             </div>
           </div>
-          <div className="mt-5 overflow-x-auto">
+          <div className="mt-5 overflow-x-auto admin-table-scroll" tabIndex={0} role="region" aria-label="Invoice ledger">
             <table className="w-full">
               <thead>
                 <tr className="border-b border-slate-200">
@@ -785,7 +787,7 @@ export default function PaymentsPage() {
 
         <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-gray-800">
           <h2 className="text-lg font-bold text-slate-900">Payment records</h2>
-          <div className="mt-4 overflow-x-auto">
+          <div className="mt-4 overflow-x-auto admin-table-scroll" tabIndex={0} role="region" aria-label="Payment records">
             <table className="w-full">
               <thead>
                 <tr className="border-b border-slate-200">

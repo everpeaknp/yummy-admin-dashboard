@@ -1365,7 +1365,7 @@ function LegacySubscriptionsPage() {
                   linked restaurant to make the first plan assignment.
                 </p>
               </div>
-              <div className="mt-4 overflow-x-auto">
+              <div className="mt-4 overflow-x-auto admin-table-scroll" tabIndex={0} role="region" aria-label="Billing accounts requiring attention">
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-amber-200">
@@ -1461,7 +1461,7 @@ function LegacySubscriptionsPage() {
               ))}
             </select>
           </div>
-          <div className="mt-4 overflow-x-auto">
+          <div className="mt-4 overflow-x-auto admin-table-scroll" tabIndex={0} role="region" aria-label="Upgrade requests">
             <table className="w-full">
               <thead>
                 <tr className="border-b border-slate-200">
@@ -1902,7 +1902,7 @@ function LegacySubscriptionsPage() {
               </div>
             </div>
 
-            <div className="mt-5 overflow-x-auto">
+            <div className="mt-5 overflow-x-auto admin-table-scroll" tabIndex={0} role="region" aria-label="Subscription audit">
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-slate-200">

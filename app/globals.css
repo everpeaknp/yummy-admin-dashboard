@@ -583,3 +583,137 @@ body {
 .dark ::-webkit-scrollbar-thumb:hover {
   background: #64748B;
 }
+
+/* The admin workspace uses a compact app bar and stacked records on phones. */
+.dashboard-content {
+  min-width: 0;
+}
+
+.dashboard-content :is(input, select, textarea) {
+  max-width: 100%;
+}
+
+.dashboard-content :is(button, a, input, select, textarea, summary):focus-visible {
+  outline: 2px solid #c2410c;
+  outline-offset: 2px;
+  scroll-margin-top: 4rem;
+}
+
+.dark .dashboard-content :is(button, a, input, select, textarea, summary):focus-visible {
+  outline-color: #fb923c;
+}
+
+.dashboard-content :is(button, a, summary),
+.admin-sidebar :is(button, a) {
+  touch-action: manipulation;
+}
+
+@media (max-width: 767px) {
+  .dashboard-content {
+    overflow-x: clip;
+  }
+
+  .dashboard-content :is(h1, h2, h3, p) {
+    overflow-wrap: anywhere;
+  }
+
+  .dashboard-content button:not([role="switch"]) {
+    min-height: 44px;
+  }
+
+  .dashboard-content button[role="switch"]::after {
+    position: absolute;
+    inset: -8px 0;
+    content: "";
+  }
+
+  .dashboard-content .admin-table-scroll {
+    max-width: 100%;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .dashboard-content .admin-table-scroll::before {
+    display: block;
+    width: max-content;
+    padding: .5rem 0;
+    color: #64748b;
+    content: "Swipe sideways to view all columns";
+    font-size: .75rem;
+  }
+
+  .dashboard-content .admin-table-scroll:focus-visible {
+    outline: 2px solid #f97316;
+    outline-offset: -2px;
+  }
+
+  .dashboard-content .admin-table-scroll > table:not(.mobile-card-table) {
+    min-width: 42rem;
+  }
+
+  .dashboard-content .mobile-card-table,
+  .dashboard-content .mobile-card-table tbody,
+  .dashboard-content .mobile-card-table tr,
+  .dashboard-content .mobile-card-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .dashboard-content .mobile-card-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+  }
+
+  .dashboard-content .mobile-card-table tbody {
+    padding: .75rem;
+  }
+
+  .dashboard-content .mobile-card-table tr {
+    margin-bottom: .75rem;
+    overflow: hidden;
+    border: 1px solid #e2e8f0;
+    border-radius: .75rem;
+  }
+
+  .dashboard-content .mobile-card-table tr:last-child {
+    margin-bottom: 0;
+  }
+
+  .dashboard-content .mobile-card-table td {
+    padding: .65rem .85rem;
+    text-align: left;
+    overflow-wrap: anywhere;
+  }
+
+  .dashboard-content .mobile-card-table td + td {
+    border-top: 1px solid #f1f5f9;
+  }
+
+  .dashboard-content .mobile-card-table td[data-label]::before {
+    display: block;
+    margin-bottom: .25rem;
+    color: #64748b;
+    content: attr(data-label);
+    font-size: .7rem;
+    font-weight: 700;
+  }
+
+  .dark .dashboard-content .mobile-card-table tr,
+  .dark .dashboard-content .mobile-card-table td + td {
+    border-color: #334155;
+  }
+
+  .dark .dashboard-content .mobile-card-table td[data-label]::before {
+    color: #94a3b8;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body {
+    transition: none;
+  }
+}

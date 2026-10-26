@@ -196,6 +196,7 @@ export default function OverviewPage() {
               <input
                 type="text"
                 placeholder="Search restaurants"
+                aria-label="Search restaurants"
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
                 className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-4 text-sm text-slate-700 placeholder:text-slate-400 outline-none ring-0 transition focus:border-orange-400/60 focus:bg-white sm:w-72"
@@ -230,7 +231,7 @@ export default function OverviewPage() {
 
         <section className="grid grid-cols-1 gap-5 xl:grid-cols-3">
           <Card className="p-6 xl:col-span-2">
-            <div className="flex items-center justify-between mb-5">
+            <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h2 className="text-lg font-bold text-slate-900">Restaurant Portfolio</h2>
                 <p className="text-sm text-slate-500">Billing mix and service enablement at a glance</p>
@@ -340,8 +341,8 @@ export default function OverviewPage() {
               </Link>
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full">
+            <div>
+              <table className="mobile-card-table w-full">
                 <thead>
                   <tr className="border-b border-slate-200">
                     <th className="pb-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Restaurant</th>
@@ -361,7 +362,7 @@ export default function OverviewPage() {
                   ) : filteredRestaurants.length ? (
                     filteredRestaurants.map((restaurant) => (
                       <tr key={restaurant.id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
-                        <td className="py-4 pr-4">
+                        <td data-label="Restaurant" className="py-4 pr-4">
                           <div className="flex items-center gap-3">
                       <RestaurantAvatar
                         name={restaurant.name}
@@ -375,13 +376,13 @@ export default function OverviewPage() {
                       </div>
                           </div>
                         </td>
-                        <td className="py-4 pr-4">
+                        <td data-label="Billing" className="py-4 pr-4">
                           <div className="space-y-1">
                             <p className="text-sm font-semibold text-slate-900">{titleCase(restaurant.billing_mode || restaurant.plan_state || "unknown")}</p>
                             <p className="text-xs text-slate-500">{titleCase(restaurant.plan_state || "unknown")}</p>
                           </div>
                         </td>
-                        <td className="py-4 pr-4">
+                        <td data-label="Services" className="py-4 pr-4">
                           <div className="flex flex-wrap gap-2">
                             <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${restaurant.restaurant_enabled ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
                               Restaurant
@@ -397,11 +398,11 @@ export default function OverviewPage() {
                             </span>
                           </div>
                         </td>
-                        <td className="py-4 pr-4 text-sm text-slate-600">
+                        <td data-label="Contact" className="py-4 pr-4 text-sm text-slate-600">
                           <p>{restaurant.phone}</p>
                           <p className="text-xs text-slate-400">{restaurant.timezone}</p>
                         </td>
-                        <td className="py-4 text-right">
+                        <td data-label="Action" className="py-4 text-right">
                           {canManageRestaurants(getStoredAuthSession()) ? (
                             <Link
                               href={`/dashboard/restaurants/${restaurant.id}`}

@@ -73,6 +73,7 @@ export default function HotelsPage() {
           <input
             type="text"
             placeholder="Search hotels"
+            aria-label="Search hotels"
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
             className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-9 pr-4 text-sm text-slate-700 outline-none transition focus:border-orange-400 lg:w-72"
@@ -92,8 +93,8 @@ export default function HotelsPage() {
           <p className="text-sm text-slate-500">Open any hotel-enabled restaurant to edit details and flags.</p>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full">
+        <div>
+          <table className="mobile-card-table w-full">
             <thead className="bg-slate-50">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Restaurant</th>
@@ -119,7 +120,7 @@ export default function HotelsPage() {
               ) : filteredHotels.length ? (
                 filteredHotels.map((restaurant) => (
                   <tr key={restaurant.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-6 py-4">
+                    <td data-label="Restaurant" className="px-6 py-4">
                       <div className="flex items-center gap-3">
                         <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-orange-100 text-sm font-bold text-orange-600">
                           {restaurant.name.charAt(0)}
@@ -130,22 +131,22 @@ export default function HotelsPage() {
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4">
+                    <td data-label="Modules" className="px-6 py-4">
                       <div className="flex flex-wrap gap-2 text-[11px] font-semibold">
                         <span className={`rounded-full px-2.5 py-1 ${restaurant.restaurant_enabled ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>Restaurant</span>
                         <span className="rounded-full bg-blue-100 px-2.5 py-1 text-blue-700">Hotel</span>
                         <span className={`rounded-full px-2.5 py-1 ${restaurant.kot_enabled ? "bg-orange-100 text-orange-700" : "bg-slate-100 text-slate-500"}`}>KOT</span>
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-sm text-slate-700">
+                    <td data-label="Billing" className="px-6 py-4 text-sm text-slate-700">
                       <p className="font-semibold text-slate-900">{restaurant.billing_mode}</p>
                       <p className="text-xs text-slate-500">{restaurant.plan_state}</p>
                     </td>
-                    <td className="px-6 py-4 text-sm text-slate-700">
+                    <td data-label="Contact" className="px-6 py-4 text-sm text-slate-700">
                       <p className="flex items-center gap-1"><Phone size={12} /> {restaurant.phone}</p>
                       <p className="text-xs text-slate-500">{restaurant.timezone}</p>
                     </td>
-                    <td className="px-6 py-4 text-right">
+                    <td data-label="Action" className="px-6 py-4 text-right">
                       <Link
                         href={`/dashboard/restaurants/${restaurant.id}`}
                         className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition-colors hover:border-orange-300 hover:text-orange-600"

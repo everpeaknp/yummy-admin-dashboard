@@ -184,7 +184,7 @@ export default function BillingAccountManager({ accounts, restaurants, subscript
         <div className="mt-5 grid grid-cols-1 gap-5 xl:grid-cols-2">
           <div className="rounded-xl border border-slate-200 p-4">
             <h3 className="text-sm font-bold text-slate-900">Account details</h3>
-            <div className="mt-4 grid grid-cols-2 gap-3">
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <Info label="Currency" value={selected.currency} />
               <Info label="Status" value={selected.status} />
               <Info label="Branches" value={branchUsage ? `${branchUsage.used} / ${branchUsage.limit === null ? "Unlimited" : branchUsage.limit}` : String(selected.restaurants.length)} />

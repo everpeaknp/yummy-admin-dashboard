@@ -58,7 +58,7 @@ export default function BillingModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-2 sm:p-4"
       onMouseDown={onClose}
     >
       <section
@@ -67,7 +67,7 @@ export default function BillingModal({
         aria-modal="true"
         aria-labelledby={titleId}
         aria-describedby={description ? descriptionId : undefined}
-        className={`max-h-[92vh] w-full overflow-y-auto rounded-2xl bg-white shadow-2xl ${maxWidth === "4xl" ? "max-w-4xl" : maxWidth === "2xl" ? "max-w-2xl" : "max-w-lg"}`}
+        className={`max-h-[calc(100dvh-1rem)] w-full overflow-y-auto rounded-2xl bg-white shadow-2xl sm:max-h-[92vh] ${maxWidth === "4xl" ? "max-w-4xl" : maxWidth === "2xl" ? "max-w-2xl" : "max-w-lg"}`}
         onMouseDown={(event) => event.stopPropagation()}
       >
         <header className="flex items-center justify-between border-b border-slate-200 px-6 py-4">

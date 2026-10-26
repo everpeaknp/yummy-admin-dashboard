@@ -3,7 +3,6 @@
 import { Suspense, useEffect, useState, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { LockKeyhole, Mail, Eye, EyeOff } from "lucide-react";
-import Card from "@/components/Card";
 import { canAccessAdminDashboard, clearAuthSession, getStoredAuthSession, loginWithPassword, saveAuthSession } from "@/lib/auth";
 
 export default function LoginPage() {
@@ -62,7 +61,7 @@ function LoginPageContent() {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
       <div className="mx-auto flex min-h-screen w-full max-w-lg items-center px-6 py-10">
-        <Card className="w-full border border-white/10 bg-slate-900/70 p-8 shadow-xl shadow-black/30">
+        <div className="w-full rounded-xl border border-white/10 bg-slate-900/70 p-6 text-slate-100 shadow-xl shadow-black/30 sm:p-8">
           <div className="mb-6">
             <h1 className="text-xl font-semibold tracking-tight">Sign in</h1>
           </div>
@@ -98,7 +97,7 @@ function LoginPageContent() {
                 <button
                   type="button"
                   onClick={() => setShowPassword((current) => !current)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition hover:text-slate-200"
+                  className="absolute right-1 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-lg text-slate-400 transition hover:text-slate-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500"
                   aria-label={showPassword ? "Hide password" : "Show password"}
                 >
                   {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
@@ -107,7 +106,7 @@ function LoginPageContent() {
             </label>
 
             {error ? (
-              <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+              <div role="alert" className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
                 {error}
               </div>
             ) : null}
@@ -120,7 +119,7 @@ function LoginPageContent() {
               {isSubmitting ? "Signing in..." : "Sign In"}
             </button>
           </form>
-        </Card>
+        </div>
       </div>
     </div>
   );

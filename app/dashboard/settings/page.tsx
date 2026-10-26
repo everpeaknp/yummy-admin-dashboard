@@ -770,7 +770,7 @@ export default function SettingsPage() {
                 </div>
               ) : null}
 
-              <div className="mt-6 overflow-x-auto">
+              <div className="mt-6 overflow-x-auto admin-table-scroll" tabIndex={0} role="region" aria-label="Users">
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-slate-200 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
@@ -1036,7 +1036,7 @@ export default function SettingsPage() {
                 </button>
               </div>
 
-              <div className="mt-4 overflow-x-auto">
+              <div className="mt-4 overflow-x-auto admin-table-scroll" tabIndex={0} role="region" aria-label="Roles">
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-slate-200 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
@@ -1237,7 +1237,7 @@ export default function SettingsPage() {
                 </div>
               </div>
 
-              <div className="mt-6 overflow-x-auto">
+              <div className="mt-6 overflow-x-auto admin-table-scroll" tabIndex={0} role="region" aria-label="Restaurant admins">
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-slate-200 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">

@@ -275,8 +275,8 @@ export default function PlatformStaffPage() {
 
       {/* CREATE / EDIT MODAL */}
       {(showCreateModal || showEditModal) && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm overflow-y-auto">
-          <Card className="w-full max-w-2xl bg-white p-6 shadow-xl my-8">
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-900/50 p-3 backdrop-blur-sm sm:p-4">
+          <Card className="my-auto max-h-[calc(100dvh-1.5rem)] w-full max-w-2xl overflow-y-auto bg-white p-4 shadow-xl sm:max-h-[calc(100dvh-2rem)] sm:p-6">
             <h2 className="text-xl font-bold text-slate-900 mb-6">
               {showCreateModal ? 'Add Staff Member' : 'Edit Staff Member'}
             </h2>
@@ -386,8 +386,8 @@ export default function PlatformStaffPage() {
 
       {/* PASSWORD MODAL */}
       {showPasswordModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-          <Card className="w-full max-w-md bg-white p-6 shadow-xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-3 backdrop-blur-sm sm:p-4">
+          <Card className="max-h-[calc(100dvh-1.5rem)] w-full max-w-md overflow-y-auto bg-white p-4 shadow-xl sm:p-6">
             <h2 className="text-xl font-bold text-slate-900 mb-2">Change Password</h2>
             <p className="text-sm text-slate-500 mb-6">Updating password for {showPasswordModal.name}</p>
             

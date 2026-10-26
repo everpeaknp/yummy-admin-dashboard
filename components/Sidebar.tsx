@@ -4,13 +4,15 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { 
   LayoutDashboard, 
   CreditCard,
   Repeat,
   Users,
   Building2,
+  Hotel,
+  ReceiptText,
   PanelTop,
   BookOpenCheck,
   LogOut,
@@ -25,6 +27,7 @@ import {
   canViewPlatformStaff,
   canViewBillingCatalog,
   canViewBillingSubscriptions,
+  canViewBillingPayments,
   hasPermission,
   isSuperadminSession,
 } from "@/lib/auth";
@@ -39,6 +42,24 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarPr
   const router = useRouter();
   
   const [session] = useState<AuthSession | null>(() => getStoredAuthSession());
+  const mobileDrawerRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (!mobileOpen) return;
+    mobileDrawerRef.current?.querySelector<HTMLElement>('button[aria-label="Close navigation"]')?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onMobileClose?.();
+      if (event.key !== "Tab") return;
+      const focusable = Array.from(mobileDrawerRef.current?.querySelectorAll<HTMLElement>('a[href], button:not([disabled])') || []);
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [mobileOpen, onMobileClose]);
 
   const handleLogout = async () => {
     await logoutSession();
@@ -51,11 +72,13 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarPr
     { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
     { href: "/dashboard/leads", label: "Leads", icon: Users, permission: "platform.leads.view" },
     { href: "/dashboard/restaurants", label: "Restaurants", icon: Building2, permission: "platform.restaurants.view" },
+    { href: "/dashboard/hotels", label: "Hotels", icon: Hotel, permission: "platform.restaurants.view" },
     { href: "/dashboard/banners", label: "Dashboard banners", icon: PanelTop, permission: "platform.restaurants.manage" },
     { href: "/dashboard/help-center", label: "Guides & tutorials", icon: BookOpenCheck, permission: "platform.restaurants.manage" },
     { href: "/dashboard/plans", label: "Plans", icon: CreditCard, canAccess: canViewBillingCatalog },
     { href: "/dashboard/sms-credits", label: "SMS credits", icon: MessageSquareText, canAccess: canViewBillingCatalog },
     { href: "/dashboard/subscriptions", label: "Subscriptions", icon: Repeat, canAccess: canViewBillingSubscriptions },
+    { href: "/dashboard/payments", label: "Payments", icon: ReceiptText, canAccess: canViewBillingPayments },
     { href: "/dashboard/staff", label: "Platform Staff", icon: Shield, canAccess: canViewPlatformStaff },
     { href: "/dashboard/settings", label: "Access & Settings", icon: Users },
   ];
@@ -69,7 +92,7 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarPr
 
   const isActive = (href: string) => {
     if (href === "/dashboard") {
-      return pathname === "/dashboard";
+      return pathname === "/dashboard" || pathname === "/dashboard/overview";
     }
     return pathname.startsWith(href);
   };
@@ -102,7 +125,7 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarPr
         {/* Mobile close */}
         <button
           type="button"
-          className="md:hidden inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+          className="md:hidden inline-flex h-11 w-11 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500 dark:text-slate-300 dark:hover:bg-slate-800"
           onClick={closeMobile}
           aria-label="Close navigation"
         >
@@ -162,14 +185,14 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarPr
 
       {/* Mobile drawer */}
       {mobileOpen && (
-        <div className="md:hidden fixed inset-0 z-50">
+        <div className="fixed inset-0 z-50 md:hidden">
           <button
             type="button"
             className="absolute inset-0 bg-black/40"
             aria-label="Close navigation overlay"
             onClick={closeMobile}
           />
-          <aside className="admin-sidebar absolute left-0 top-0 h-screen w-[200px] bg-white dark:bg-slate-950 border-r border-slate-200 dark:border-slate-800 flex flex-col shadow-xl">
+          <aside id="mobile-admin-navigation" ref={mobileDrawerRef} aria-label="Admin navigation" className="admin-sidebar absolute inset-y-0 left-0 flex w-[min(18rem,85vw)] flex-col border-r border-slate-200 bg-white shadow-xl dark:border-slate-800 dark:bg-slate-950">
             {content}
           </aside>
         </div>

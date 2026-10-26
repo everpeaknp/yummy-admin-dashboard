@@ -42,15 +42,15 @@ export default function PromoCodeManager({ promos, plans, draft, setDraft, canMa
         <div className="mt-5 grid gap-4">
           <label className="text-sm font-semibold">Code (optional)<input name="promo-code" autoComplete="off" spellCheck={false} disabled={!canManage} value={draft.code} onChange={(event) => setDraft((current) => ({ ...current, code: event.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, "") }))} maxLength={32} placeholder="Example: LAUNCH10" className={`${inputClass} font-mono uppercase`} /></label>
           <label className="text-sm font-semibold">Internal description<input name="promo-description" autoComplete="off" disabled={!canManage} value={draft.description} onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))} maxLength={255} placeholder="Example: Launch offer" className={inputClass} /></label>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             <label className="text-sm font-semibold">Discount type<select name="promo-discount-type" disabled={!canManage} value={draft.discountType} onChange={(event) => setDraft((current) => ({ ...current, discountType: event.target.value as PromoDraft["discountType"] }))} className={inputClass}><option value="percentage">Percentage</option><option value="fixed">Fixed NPR</option></select></label>
             <label className="text-sm font-semibold">Value<input name="promo-discount-value" disabled={!canManage} type="number" inputMode="decimal" min="0.01" max={draft.discountType === "percentage" ? 99.99 : undefined} step="0.01" value={draft.discountValue} onChange={(event) => setDraft((current) => ({ ...current, discountValue: Number(event.target.value) }))} className={inputClass} /></label>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             <label className="text-sm font-semibold">Plan<select name="promo-plan" disabled={!canManage} value={draft.planCode} onChange={(event) => setDraft((current) => ({ ...current, planCode: event.target.value }))} className={inputClass}><option value="all">All paid plans</option>{plans.filter((plan) => plan.code !== "free").map((plan) => <option key={plan.id} value={plan.code}>{plan.name}</option>)}</select></label>
             <label className="text-sm font-semibold">Billing term<select name="promo-term" disabled={!canManage} value={draft.interval} onChange={(event) => setDraft((current) => ({ ...current, interval: event.target.value }))} className={inputClass}><option value="all">All terms</option>{terms.map((months) => <option key={months} value={months}>{months} month{months === 1 ? "" : "s"}</option>)}</select></label>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             <label className="text-sm font-semibold">Total uses<input name="promo-total-uses" disabled={!canManage} type="number" inputMode="numeric" min="1" value={draft.maxRedemptions} onChange={(event) => setDraft((current) => ({ ...current, maxRedemptions: event.target.value }))} placeholder="Unlimited" className={inputClass} /></label>
             <label className="text-sm font-semibold">Per account<input name="promo-per-account" disabled={!canManage} type="number" inputMode="numeric" min="1" value={draft.perAccountLimit} onChange={(event) => setDraft((current) => ({ ...current, perAccountLimit: Number(event.target.value) }))} className={inputClass} /></label>
           </div>

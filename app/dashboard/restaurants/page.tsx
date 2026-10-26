@@ -314,9 +314,10 @@ export default function RestaurantsPage() {
                 <h2 className="text-lg font-bold text-gray-900 dark:text-white">All Restaurants</h2>
                 <p className="text-sm text-gray-500 dark:text-gray-400">Pulled directly from the backend</p>
               </div>
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
                 <select
                   value={statusFilter}
+                  aria-label="Filter restaurants"
                   onChange={(event) => setStatusFilter(event.target.value)}
                   className="px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-orange-500"
                 >
@@ -339,18 +340,20 @@ export default function RestaurantsPage() {
                     <option value="expiring_30">Expiring ≤ 30 Days</option>
                   </optgroup>
                 </select>
-                <div className="flex items-center gap-2">
-                  <label className="text-sm text-gray-600 dark:text-gray-400 font-medium">Expires From:</label>
+                <div className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
+                  <label htmlFor="restaurant-expiry-from" className="text-sm text-gray-600 dark:text-gray-400 font-medium">Expires From:</label>
                   <input
+                    id="restaurant-expiry-from"
                     type="date"
                     value={expiryDateFrom}
                     onChange={(event) => setExpiryDateFrom(event.target.value)}
                     className="px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-orange-500"
                   />
                 </div>
-                <div className="flex items-center gap-2">
-                  <label className="text-sm text-gray-600 dark:text-gray-400 font-medium">To:</label>
+                <div className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
+                  <label htmlFor="restaurant-expiry-to" className="text-sm text-gray-600 dark:text-gray-400 font-medium">To:</label>
                   <input
+                    id="restaurant-expiry-to"
                     type="date"
                     value={expiryDateTo}
                     onChange={(event) => setExpiryDateTo(event.target.value)}
@@ -362,17 +365,18 @@ export default function RestaurantsPage() {
                   <input
                     type="text"
                     placeholder="Search restaurants..."
+                    aria-label="Search restaurants"
                     value={searchQuery}
                     onChange={(event) => setSearchQuery(event.target.value)}
-                    className="pl-9 pr-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-orange-500 w-64"
+                    className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-orange-500 sm:w-64"
                   />
                 </label>
               </div>
             </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full">
+          <div>
+            <table className="mobile-card-table w-full">
               <thead className="bg-gray-50 dark:bg-gray-900/50 border-b border-gray-100 dark:border-gray-700">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">
@@ -416,7 +420,7 @@ export default function RestaurantsPage() {
                     const expiry = getExpiryCellData(restaurant);
                     return (
                       <tr key={restaurant.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                      <td className="px-6 py-4">
+                      <td data-label="Restaurant" className="px-6 py-4">
                         <div className="flex items-center gap-3">
                           <RestaurantAvatar
                             name={restaurant.name}
@@ -432,7 +436,7 @@ export default function RestaurantsPage() {
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-4">
+                      <td data-label="Billing" className="px-6 py-4">
                         <div className="space-y-1">
                           <span className={`px-2 py-1 text-xs font-semibold rounded uppercase bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300`}>
                             {((restaurant.billing_mode || "").toLowerCase() === "trial_paid" && expiry.isExpired) || restaurant.plan_state === "trial_expired" 
@@ -450,7 +454,7 @@ export default function RestaurantsPage() {
                           </p>
                         </div>
                       </td>
-                      <td className="px-6 py-4">
+                      <td data-label="Modules" className="px-6 py-4">
                         <div className="flex flex-wrap gap-2">
                           <span className={`px-2 py-1 text-xs font-semibold rounded ${restaurant.restaurant_enabled ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
                             Restaurant
@@ -467,20 +471,20 @@ export default function RestaurantsPage() {
                           </span>
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">{restaurant.timezone}</td>
-                      <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
+                      <td data-label="Timezone" className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">{restaurant.timezone}</td>
+                      <td data-label="Contact" className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
                         <div className="space-y-1">
                           <p className="flex items-center gap-1"><Phone size={12} /> {restaurant.phone}</p>
                           <p className="text-xs text-gray-500 dark:text-gray-400">Owner ID {restaurant.registered_by}</p>
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
+                      <td data-label="Expires" className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
                         <div className="space-y-1">
                           <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">{expiry.label}</p>
                           <p className={expiry.isExpired ? "text-red-600 font-bold" : expiry.isExpiringSoon ? "text-orange-500 font-semibold" : ""}>{expiry.value}</p>
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-right">
+                      <td data-label="Action" className="px-6 py-4 text-right">
                         {canManageRestaurants(getStoredAuthSession()) && (
                           <Link
                             href={`/dashboard/restaurants/${restaurant.id}`}

@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { Fingerprint, MapPin, Pencil, Phone, Search, Utensils } from "lucide-react";
-import { getPlatformRestaurantOptions, type BackendRestaurantOption } from "@/lib/backend-api";
-import { canManageRestaurants, getStoredAuthSession } from "@/lib/auth";
+import { createBillingSubscriptionOverride, deleteBillingSubscriptionOverride, getBillingSubscriptions, getPlatformRestaurantOptions, type BackendRestaurantOption, type BillingSubscription } from "@/lib/backend-api";
+import { canManageBillingOverrides, canManageRestaurants, getStoredAuthSession } from "@/lib/auth";
 import RestaurantAvatar from "@/components/RestaurantAvatar";
 
 function formatExpiryDate(value?: string | null): string {
@@ -94,8 +94,12 @@ function getExpiryCellData(restaurant: BackendRestaurantOption): { label: string
 
 export default function RestaurantsPage() {
   const [restaurantsList, setRestaurantsList] = useState<BackendRestaurantOption[]>([]);
+  const [subscriptions, setSubscriptions] = useState<BillingSubscription[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionNotice, setActionNotice] = useState<string | null>(null);
+  const [savingSubscriptionId, setSavingSubscriptionId] = useState<number | null>(null);
   const [statusFilter, setStatusFilter] = useState("all");
   const [expiryDateFrom, setExpiryDateFrom] = useState("");
   const [expiryDateTo, setExpiryDateTo] = useState("");
@@ -107,11 +111,18 @@ export default function RestaurantsPage() {
     async function loadRestaurants() {
       try {
         const token = window.localStorage.getItem("accessToken") || undefined;
-        const response = await getPlatformRestaurantOptions({ token });
+        const canManageQr = canManageBillingOverrides(getStoredAuthSession());
+        const [response, subscriptionResponse] = await Promise.all([
+          getPlatformRestaurantOptions({ token }),
+          canManageQr ? getBillingSubscriptions({}, { token }).catch(() => null) : Promise.resolve(null),
+        ]);
         if (!isMounted) {
           return;
         }
         setRestaurantsList(response.data || []);
+        const subscriptionData = subscriptionResponse?.data;
+        setSubscriptions(subscriptionData ? (Array.isArray(subscriptionData) ? subscriptionData : subscriptionData.items || []) : []);
+        if (canManageQr && !subscriptionResponse) setActionError("QR ordering controls are unavailable. Reload the page to try again.");
         setError(null);
       } catch (loadError) {
         if (!isMounted) {
@@ -133,6 +144,59 @@ export default function RestaurantsPage() {
     };
   }, []);
 
+  const subscriptionFor = (restaurant: BackendRestaurantOption) =>
+    subscriptions.find((subscription) => subscription.id === restaurant.qr_subscription_id);
+
+  const changeQrOrdering = async (restaurant: BackendRestaurantOption) => {
+    const subscription = subscriptionFor(restaurant);
+    if (!subscription || savingSubscriptionId !== null || !canManageBillingOverrides(getStoredAuthSession())) return;
+    const linkedCount = subscription.restaurant_ids?.length || 1;
+    if (linkedCount > 1 && !window.confirm(`This subscription covers ${linkedCount} restaurants. Change customer QR ordering for all of them?`)) return;
+    const enabled = !restaurant.qr_ordering_enabled;
+    setSavingSubscriptionId(subscription.id);
+    setActionError(null);
+    setActionNotice(null);
+    try {
+      const token = window.localStorage.getItem("accessToken") || undefined;
+      await createBillingSubscriptionOverride(subscription.id, {
+        entitlement_key: "menu.qr_ordering.enabled",
+        override_value: enabled,
+        reason: `${enabled ? "Enabled" : "Disabled"} customer QR ordering from Restaurants list`,
+      }, { token });
+      const now = Date.now();
+      const previous = (subscription.overrides || []).filter((override) =>
+        override.entitlement_key === "menu.qr_ordering.enabled" &&
+        (!override.starts_at || new Date(override.starts_at).getTime() <= now) &&
+        (!override.ends_at || new Date(override.ends_at).getTime() >= now)
+      );
+      for (const override of previous) {
+        await deleteBillingSubscriptionOverride(subscription.id, override.id, "Replaced customer QR ordering from Restaurants list", { token });
+      }
+      const [restaurantsResponse, subscriptionsResponse] = await Promise.all([
+        getPlatformRestaurantOptions({ token }),
+        getBillingSubscriptions({}, { token }),
+      ]);
+      setRestaurantsList(restaurantsResponse.data || []);
+      const subscriptionData = subscriptionsResponse.data;
+      setSubscriptions(Array.isArray(subscriptionData) ? subscriptionData : subscriptionData.items || []);
+      setActionNotice(`Customer QR ordering ${enabled ? "enabled" : "disabled"} for ${restaurant.name}${linkedCount > 1 ? ` and ${linkedCount - 1} other restaurants` : ""}.`);
+    } catch (changeError) {
+      const token = window.localStorage.getItem("accessToken") || undefined;
+      const [restaurantsResult, subscriptionsResult] = await Promise.allSettled([
+        getPlatformRestaurantOptions({ token }),
+        getBillingSubscriptions({}, { token }),
+      ]);
+      if (restaurantsResult.status === "fulfilled") setRestaurantsList(restaurantsResult.value.data || []);
+      if (subscriptionsResult.status === "fulfilled") {
+        const data = subscriptionsResult.value.data;
+        setSubscriptions(Array.isArray(data) ? data : data.items || []);
+      }
+      setActionError(`${changeError instanceof Error ? changeError.message : "Could not update customer QR ordering."} Check the current status before trying again.`);
+    } finally {
+      setSavingSubscriptionId(null);
+    }
+  };
+
   const filteredRestaurants = useMemo(() => {
     return restaurantsList.filter((restaurant) => {
       let isMatchingStatus = true;
@@ -150,6 +214,12 @@ export default function RestaurantsPage() {
           break;
         case "attendance_disabled":
           isMatchingStatus = !restaurant.attendance_enabled;
+          break;
+        case "qr_ordering_enabled":
+          isMatchingStatus = restaurant.qr_ordering_enabled;
+          break;
+        case "qr_ordering_disabled":
+          isMatchingStatus = !restaurant.qr_ordering_enabled;
           break;
         case "trial": {
           const expDate = getExpiryDateObj(restaurant);
@@ -248,6 +318,7 @@ export default function RestaurantsPage() {
     const active = restaurantsList.filter((restaurant) => restaurant.restaurant_enabled).length;
     const hotelEnabled = restaurantsList.filter((restaurant) => restaurant.hotel_enabled).length;
     const attendanceEnabled = restaurantsList.filter((restaurant) => restaurant.attendance_enabled).length;
+    const qrOrderingEnabled = restaurantsList.filter((restaurant) => restaurant.qr_ordering_enabled).length;
     const trial = restaurantsList.filter((restaurant) => (restaurant.plan_state || "").toLowerCase().includes("trial")).length;
 
     const now = new Date();
@@ -262,7 +333,7 @@ export default function RestaurantsPage() {
       }
     });
 
-    return { total, active, hotelEnabled, attendanceEnabled, trial, expiringSoon };
+    return { total, active, hotelEnabled, attendanceEnabled, qrOrderingEnabled, trial, expiringSoon };
   }, [restaurantsList]);
 
   return (
@@ -280,7 +351,10 @@ export default function RestaurantsPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-6 gap-4">
+        {actionError && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{actionError}</p>}
+        {actionNotice && <p role="status" className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">{actionNotice}</p>}
+
+        <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-7 gap-4">
           <div className="bg-white dark:bg-gray-800 rounded-lg p-5 shadow-sm border border-gray-100 dark:border-gray-700">
             <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Total Restaurants</p>
             <p className="text-2xl font-bold text-gray-900 dark:text-white mt-2">{summary.total}</p>
@@ -297,6 +371,10 @@ export default function RestaurantsPage() {
             <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Attendance</p>
             <p className="text-2xl font-bold text-gray-900 dark:text-white mt-2">{summary.attendanceEnabled}</p>
           </div>
+          <button type="button" onClick={() => setStatusFilter("qr_ordering_enabled")} aria-pressed={statusFilter === "qr_ordering_enabled"} className={`rounded-lg border bg-orange-50 p-5 text-left shadow-sm hover:border-orange-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 dark:bg-gray-800 ${statusFilter === "qr_ordering_enabled" ? "border-orange-500 ring-2 ring-orange-200" : "border-orange-200 dark:border-orange-900"}`} aria-label="Show restaurants with customer QR ordering enabled">
+            <span className="text-xs font-semibold uppercase tracking-wider text-orange-800 dark:text-orange-300">QR ordering</span>
+            <span className="mt-2 block text-2xl font-bold text-gray-900 dark:text-white">{summary.qrOrderingEnabled}</span>
+          </button>
           <div className="bg-white dark:bg-gray-800 rounded-lg p-5 shadow-sm border border-gray-100 dark:border-gray-700">
             <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Trial / Limited</p>
             <p className="text-2xl font-bold text-gray-900 dark:text-white mt-2">{summary.trial}</p>
@@ -327,6 +405,8 @@ export default function RestaurantsPage() {
                     <option value="hotel_enabled">Hotel Enabled</option>
                     <option value="attendance_enabled">Attendance Enabled</option>
                     <option value="attendance_disabled">Attendance Disabled</option>
+                    <option value="qr_ordering_enabled">QR Ordering Enabled</option>
+                    <option value="qr_ordering_disabled">QR Ordering Disabled</option>
                   </optgroup>
                   <optgroup label="Billing Status">
                     <option value="free">Free</option>
@@ -383,6 +463,9 @@ export default function RestaurantsPage() {
                     Restaurant
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">
+                    Customer QR ordering
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">
                     Billing
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">
@@ -405,13 +488,13 @@ export default function RestaurantsPage() {
               <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                 {isLoading ? (
                   <tr>
-                    <td className="px-6 py-8 text-sm text-gray-500 dark:text-gray-400" colSpan={7}>
+                    <td className="px-6 py-8 text-sm text-gray-500 dark:text-gray-400" colSpan={8}>
                       Loading restaurants...
                     </td>
                   </tr>
                 ) : error ? (
                   <tr>
-                    <td className="px-6 py-8 text-sm text-red-600 dark:text-red-400" colSpan={7}>
+                    <td className="px-6 py-8 text-sm text-red-600 dark:text-red-400" colSpan={8}>
                       {error}
                     </td>
                   </tr>
@@ -434,6 +517,13 @@ export default function RestaurantsPage() {
                               {restaurant.address}
                             </p>
                           </div>
+                        </div>
+                      </td>
+                      <td data-label="Customer QR ordering" className="px-6 py-4">
+                        <div className="flex flex-col items-start gap-2">
+                          <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${restaurant.qr_ordering_enabled ? "bg-emerald-50 text-emerald-800" : "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300"}`}>{restaurant.qr_ordering_enabled ? "Enabled" : "Off"}</span>
+                          {canManageBillingOverrides(getStoredAuthSession()) && <button type="button" onClick={() => void changeQrOrdering(restaurant)} disabled={savingSubscriptionId !== null || !subscriptionFor(restaurant) || (restaurant.billing_mode || "").toLowerCase() === "free"} className="min-h-9 text-xs font-semibold text-orange-700 hover:text-orange-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 disabled:cursor-not-allowed disabled:text-gray-400">{savingSubscriptionId === restaurant.qr_subscription_id ? "Saving…" : restaurant.qr_ordering_enabled ? "Disable" : "Enable"}</button>}
+                          {!restaurant.qr_ordering_enabled && (restaurant.billing_mode || "").toLowerCase() === "free" && <span className="text-xs text-gray-500">Plan required</span>}
                         </div>
                       </td>
                       <td data-label="Billing" className="px-6 py-4">
@@ -508,7 +598,7 @@ export default function RestaurantsPage() {
                   })
                 ) : (
                   <tr>
-                    <td className="px-6 py-8 text-sm text-gray-500 dark:text-gray-400" colSpan={7}>
+                    <td className="px-6 py-8 text-sm text-gray-500 dark:text-gray-400" colSpan={8}>
                       No restaurants matched the current filters.
                     </td>
                   </tr>

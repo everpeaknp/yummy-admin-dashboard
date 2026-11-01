@@ -399,7 +399,7 @@ export type BackendRestaurantOption = Pick<
   | "plan_state"
   | "trial_ends_at"
   | "paid_ends_at"
->;
+> & { qr_ordering_enabled: boolean; qr_subscription_id: number | null };
 
 export type DashboardPromoBannerUpdatePayload = {
   alt_text?: string;

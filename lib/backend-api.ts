@@ -1649,6 +1649,13 @@ export async function getPublicBillingCatalog(
   return backendFetch<BaseResponse<PublicBillingCatalog>>("/subscriptions/catalog", options);
 }
 
+export async function getRestaurantSubscriptionContext(
+  restaurantId: number,
+  options: BackendClientOptions = {},
+): Promise<BaseResponse<{ billing_mode: string; plan_state: string; entitlements: Record<string, unknown> }>> {
+  return backendFetch(`/subscriptions/current?restaurant_id=${restaurantId}`, options);
+}
+
 export async function getBillingPlans(
   options: BackendClientOptions = {},
 ): Promise<BaseResponse<BillingPlan[]>> {

@@ -10,6 +10,7 @@ import {
   getBillingEntitlementDefinitions,
   getBillingPlanVersion,
   getBillingSubscriptions,
+  getRestaurantSubscriptionContext,
   getPublicBillingCatalog,
   isBackendRouteUnavailable,
   type BackendRestaurant,
@@ -41,6 +42,7 @@ type Props = {
 
 const ASSIGNMENT_TERMS = [1, 3, 6, 12];
 const GROW_LIMIT_KEYS = ["grow.messages.monthly", "grow.campaigns.monthly_limit", "grow.campaigns.max_recipients"];
+const QR_ORDERING_KEY = "menu.qr_ordering.enabled";
 
 const token = () => window.localStorage.getItem("accessToken") || undefined;
 
@@ -118,6 +120,7 @@ export default function RestaurantSubscriptionCard(props: Props) {
   const [subscriptions, setSubscriptions] = useState<BillingSubscription[]>([]);
   const [plans, setPlans] = useState<BillingPlan[]>([]);
   const [definitions, setDefinitions] = useState<BillingEntitlementDefinition[]>([]);
+  const [qrAccess, setQrAccess] = useState<{ billing_mode: string; plan_state: string; enabled: boolean } | null>(null);
   const [selectedPlanId, setSelectedPlanId] = useState<number | null>(null);
   const [assignmentDuration, setAssignmentDuration] = useState(12);
   const [adjustmentDays, setAdjustmentDays] = useState("");
@@ -136,10 +139,11 @@ export default function RestaurantSubscriptionCard(props: Props) {
     }
     setError(null);
     try {
-      const [subscriptionsResponse, catalogResponse, definitionsResponse] = await Promise.all([
+      const [subscriptionsResponse, catalogResponse, definitionsResponse, contextResponse] = await Promise.all([
         getBillingSubscriptions({ restaurantId: props.restaurant.id }, { token: token() }),
         getPublicBillingCatalog({ token: token() }),
         getBillingEntitlementDefinitions({ token: token() }),
+        getRestaurantSubscriptionContext(props.restaurant.id, { token: token() }),
       ]);
       const history = unwrap(subscriptionsResponse.data).filter((subscription) => matchesRestaurant(subscription, props.restaurant.id));
       const catalogPlans = catalogResponse.data?.plans || [];
@@ -156,6 +160,11 @@ export default function RestaurantSubscriptionCard(props: Props) {
       setSubscriptions(hydratedHistory);
       setPlans(catalogPlans);
       setDefinitions(definitionsResponse.data || []);
+      setQrAccess({
+        billing_mode: contextResponse.data.billing_mode,
+        plan_state: contextResponse.data.plan_state,
+        enabled: contextResponse.data.entitlements[QR_ORDERING_KEY] === true,
+      });
       setSelectedPlanId(catalogPlans.find((plan) => plan.code === activeSubscription?.plan_code)?.id ?? null);
       setMode("v2");
       props.onV2AvailabilityChange?.(true);
@@ -206,7 +215,9 @@ export default function RestaurantSubscriptionCard(props: Props) {
     && selectedPlanVersion
     && selectedPlanVersion.version_number > assignedPlanVersion,
   );
-  const booleanDefinitions = definitions.filter((definition) => definition.value_type === "boolean" && definition.is_client_visible !== false);
+  const booleanDefinitions = definitions.filter((definition) => definition.value_type === "boolean" && definition.is_client_visible !== false && definition.key !== QR_ORDERING_KEY);
+  const qrDefinition = definitions.find((definition) => definition.key === QR_ORDERING_KEY);
+  const qrListed = qrAccess?.enabled === true && (qrAccess.billing_mode === "paid" || (qrAccess.billing_mode === "trial" && qrAccess.plan_state === "trialing"));
   const growLimitDefinitions = definitions.filter((definition) => definition.value_type === "integer" && GROW_LIMIT_KEYS.includes(definition.key));
 
   const applyPlan = async () => {
@@ -331,6 +342,39 @@ export default function RestaurantSubscriptionCard(props: Props) {
     }
   };
 
+  const toggleQrOrdering = async () => {
+    if (!currentSubscription || !qrAccess || !canManageOverrides || busy) return;
+    const linkedRestaurants = currentSubscription.restaurant_ids?.length || 1;
+    if (linkedRestaurants > 1 && !window.confirm(`This subscription covers ${linkedRestaurants} restaurants. Change customer QR ordering for all of them?`)) return;
+    setBusy("qr-ordering");
+    setError(null);
+    setNotice(null);
+    try {
+      const existing = currentSubscription.overrides?.find((item) => item.entitlement_key === QR_ORDERING_KEY);
+      if (existing) await deleteBillingSubscriptionOverride(currentSubscription.id, existing.id, "Replacing customer QR ordering setting", { token: token() });
+      const enabled = !qrAccess.enabled;
+      await createBillingSubscriptionOverride(currentSubscription.id, {
+        entitlement_key: QR_ORDERING_KEY,
+        override_value: enabled,
+        reason: `${enabled ? "Enabled" : "Disabled"} customer QR ordering from restaurant access`,
+      }, { token: token() });
+      await load();
+      setNotice(`Customer QR ordering ${enabled ? "enabled" : "disabled"}.`);
+    } catch (saveError) {
+      await load();
+      setError(messageFrom(saveError, "Could not update customer QR ordering."));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const resetQrOrdering = async () => {
+    if (!qrDefinition || !currentSubscription) return;
+    const linkedRestaurants = currentSubscription.restaurant_ids?.length || 1;
+    if (linkedRestaurants > 1 && !window.confirm(`This subscription covers ${linkedRestaurants} restaurants. Restore the plan default for all of them?`)) return;
+    await clearOverride(qrDefinition);
+  };
+
   const saveGrowLimit = async (definition: BillingEntitlementDefinition, value: number | null) => {
     if (!currentSubscription || !canManageOverrides) return;
     const existing = currentSubscription.overrides?.find((item) => item.entitlement_key === definition.key);
@@ -425,6 +469,21 @@ export default function RestaurantSubscriptionCard(props: Props) {
         </div>
       </section>
 
+      <section className="border-t border-slate-200 px-6 py-6 sm:px-7">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="max-w-2xl">
+            <div className="flex flex-wrap items-center gap-2"><h3 className="text-lg font-bold text-slate-950">Customer QR ordering</h3><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${qrListed ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>{qrListed ? "Visible in Discover" : "Not in Discover"}</span></div>
+            <p className="mt-1 text-sm leading-6 text-slate-600">Customers can find this restaurant in Yummy Menu and order from a table when this feature is enabled on an eligible plan.</p>
+            {currentSubscription?.plan_code === "premium" && qrAccess?.enabled && <p className="mt-1 text-xs text-slate-500">Included with Premium.</p>}
+            {(currentSubscription?.restaurant_ids?.length || 0) > 1 && <p className="mt-2 text-xs font-semibold text-amber-800">This subscription covers {currentSubscription?.restaurant_ids?.length} restaurants. Changes affect all of them.</p>}
+            {qrAccess?.billing_mode === "free" && <p className="mt-2 text-xs text-slate-500">Assign an eligible plan to show this restaurant in Discover.</p>}
+          </div>
+          <div className="flex shrink-0 items-center gap-3">
+            {qrDefinition && currentSubscription?.overrides?.some((item) => item.entitlement_key === QR_ORDERING_KEY) && <button type="button" disabled={!canManageOverrides || busy !== null} onClick={() => void resetQrOrdering()} className="min-h-11 px-2 text-sm font-semibold text-orange-700 hover:text-orange-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 disabled:opacity-50">Use plan default</button>}
+            <button type="button" disabled={!canManageOverrides || !qrDefinition || !currentSubscription || !qrAccess || qrAccess.billing_mode === "free" || busy !== null} onClick={() => void toggleQrOrdering()} className="min-h-11 rounded-xl border border-orange-300 bg-orange-50 px-4 text-sm font-semibold text-orange-800 hover:bg-orange-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 disabled:cursor-not-allowed disabled:opacity-50">{busy === "qr-ordering" ? "Saving…" : qrAccess?.enabled ? "Disable ordering" : "Enable ordering"}</button>
+          </div>
+        </div>
+      </section>
       <FeatureOverrides definitions={booleanDefinitions} subscription={currentSubscription} canManage={canManageOverrides} busy={busy} onToggle={toggleOverride} onClear={clearOverride} />
       {currentSubscription && growLimitDefinitions.length ? <GrowLimits definitions={growLimitDefinitions} subscription={currentSubscription} canManage={canManageOverrides} busy={busy} onSave={saveGrowLimit} /> : null}
       <AssignmentHistory subscriptions={subscriptions} />
